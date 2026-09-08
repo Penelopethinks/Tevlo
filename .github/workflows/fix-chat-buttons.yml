@@ -1,0 +1,94 @@
+name: Fix Tevlo chat buttons
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-buttons:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch interactive chat controls
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '<meta name="tevlo-buttons-fixed" content="1">'
+          if marker in s:
+              print('Tevlo button patch already applied.')
+              raise SystemExit(0)
+
+          # 1) Add an actual chat-search button next to the menu button.
+          s, n = re.subn(
+              r'<div class="head-actions"><button class="ghost" id="chatMenuBtn">.*?</button></div>',
+              '<div class="head-actions"><button class="ghost" id="searchChatBtn" title="Search messages">⌕</button><button class="ghost" id="chatMenuBtn" title="Chat options">•••</button></div>',
+              s,
+              count=1,
+          )
+          print('search button:', n)
+
+          # 2) Add missing chat-menu actions that the JavaScript already expects.
+          old_menu = '''<button id="muteChat">🔕 Mute conversation</button>\n          <button id="removeFriend">👤 Remove friend</button>\n          <button id="blockUser">🚫 Block</button>\n          <button id="reportUser">⚑ Report</button>'''
+          new_menu = '''<button id="favoriteBtn">★ ${state.favorites.includes(c.id)?"Remove favorite":"Add to favorites"}</button>\n          <button id="pinBtn">⌖ ${state.pinned.includes(c.id)?"Unpin conversation":"Pin conversation"}</button>\n          <button id="themeBtn">🎨 Chat theme</button>\n          <button id="disappearBtn">⏳ Disappearing messages</button>\n          <button id="clearDraft">🧹 Clear draft</button>\n          <button id="muteChat">🔕 Mute conversation</button>\n          <button id="removeFriend">👤 Remove friend</button>\n          <button id="blockUser">🚫 Block</button>\n          <button id="reportUser">⚑ Report</button>'''
+          s = s.replace(old_menu, new_menu, 1)
+
+          # 3) Put visible reaction/reply/more buttons on each message.
+          old_rows = r'''rows\.push\(`<div class="row \$\{mine\?'mine':'theirs'\}" data-msg="\$\{m\.id\}"><div><div class="bubble">\$\{m\.reply_to_id\?`<div class="reply-chip">Replying to a message</div>`:''\}\$\{content\}</div><div class="meta">\$\{fmtTime\(m\.created_at\)\}\$\{m\.edited_at\?' · edited':''\}\$\{m\.read_at\?' · Read':''\}</div></div></div>`\);'''
+          new_rows = r'''rows.push(`<div class="row ${mine?'mine':'theirs'}" data-msg="${m.id}"><div class="message-stack"><div class="bubble">${m.reply_to_id?`<div class="reply-chip">Replying to a message</div>`:''}${content}</div><div class="message-actions"><button class="mini-action" data-react-msg="${m.id}" title="React">☺</button><button class="mini-action" data-reply-msg="${m.id}" title="Reply">↩</button>${mine?`<button class="mini-action" data-more-msg="${m.id}" title="Edit or delete">•••</button>`:''}</div><div class="meta">${fmtTime(m.created_at)}${m.edited_at?' · edited':''}${m.read_at?' · Read':''}</div></div></div>`);'''
+          s, n = re.subn(old_rows, new_rows, s, count=1)
+          print('message action buttons:', n)
+
+          # 4) Replace the old message click handler with button-based actions.
+          old_click = r'''\$\("#messages"\)\.onclick=e=>\{[\s\S]*?\n    \};'''
+          new_click = '''$("#messages").onclick=e=>{\n      const react=e.target.closest("[data-react-msg]");\n      const reply=e.target.closest("[data-reply-msg]");\n      const more=e.target.closest("[data-more-msg]");\n      const m=e.target.closest("[data-msg]"); if(!m)return;\n      if(react){e.stopPropagation();showReactionPicker(react.dataset.reactMsg);return}\n      if(reply){e.stopPropagation();setReplyTo(reply.dataset.replyMsg);return}\n      if(more){e.stopPropagation();messageActions(more.dataset.moreMsg);return}\n    };'''
+          s, n = re.subn(old_click, new_click, s, count=1)
+          print('message click handler:', n)
+
+          # 5) Add reply helper.
+          helper = '''function setReplyTo(msgId){\n    const msg=state.messages.find(x=>x.id===msgId); if(!msg)return;\n    state.replyTo=msgId;\n    const input=$("#composerText");\n    if(input){input.placeholder=`Replying to: ${(msg.body||"message").slice(0,60)}`;input.focus();}\n    toast("Replying to message.");\n  }\n\n  '''
+          s, n = re.subn(r'  function showReactionPicker\(msgId\)\{', helper + 'function showReactionPicker(msgId){', s, count=1)
+          print('reply helper:', n)
+
+          # 6) Make all chat-control bindings null-safe.
+          old_bind = '''$("#searchChatBtn").onclick=()=>{$("#chatSearchBar").classList.remove('hidden');$("#chatSearchInput").focus()};$("#closeChatSearch").onclick=()=>{$("#chatSearchBar").classList.add('hidden');$("#chatSearchInput").value='';renderMessages()};$("#chatSearchInput").oninput=()=>renderMessages();'''
+          new_bind = '''$("#searchChatBtn")?.addEventListener("click",()=>{$("#chatSearchBar")?.classList.remove('hidden');$("#chatSearchInput")?.focus()});$("#closeChatSearch")?.addEventListener("click",()=>{$("#chatSearchBar")?.classList.add('hidden');if($("#chatSearchInput"))$("#chatSearchInput").value='';renderMessages()});$("#chatSearchInput")?.addEventListener("input",()=>renderMessages());'''
+          s = s.replace(old_bind, new_bind, 1)
+          old_bind2 = '''$("#favoriteBtn").onclick=()=>toggleFavorite(c.id);$("#pinBtn").onclick=()=>togglePin(c.id);$("#themeBtn").onclick=()=>themeModal(c);$("#disappearBtn").onclick=()=>disappearModal(c);$("#clearDraft").onclick=()=>{delete state.drafts[c.id];localStorage.setItem('tevlo_drafts',JSON.stringify(state.drafts));$("#composerText").value='';autoSize();toast('Draft cleared.')};'''
+          new_bind2 = '''$("#favoriteBtn")?.addEventListener("click",()=>toggleFavorite(c.id));$("#pinBtn")?.addEventListener("click",()=>togglePin(c.id));$("#themeBtn")?.addEventListener("click",()=>themeModal(c));$("#disappearBtn")?.addEventListener("click",()=>disappearModal(c));$("#clearDraft")?.addEventListener("click",()=>{delete state.drafts[c.id];localStorage.setItem('tevlo_drafts',JSON.stringify(state.drafts));$("#composerText").value='';autoSize();toast('Draft cleared.')});'''
+          s = s.replace(old_bind2, new_bind2, 1)
+
+          # 7) Add styles for the message action buttons.
+          needle = '.meta{font-size:10px;color:var(--muted);margin-top:4px;text-align:right}'
+          css = '.message-stack{position:relative}.message-actions{display:flex;justify-content:flex-end;gap:4px;margin-top:3px;opacity:.15;transition:opacity .15s ease}.message-stack:hover .message-actions,.message-actions:focus-within{opacity:1}.mini-action{background:transparent;color:var(--muted);border:1px solid transparent;border-radius:8px;padding:2px 6px;font-size:12px}.mini-action:hover{background:#eef5f1;color:var(--teal)}'
+          if css not in s and needle in s:
+              s = s.replace(needle, needle + css, 1)
+
+          # 8) Mark the patch so the workflow won't make another commit on its own push.
+          s = s.replace('<meta name="theme-color" content="#138a5b">', '<meta name="theme-color" content="#138a5b">\n' + marker, 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+
+      - name: Commit button fix when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No changes needed."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Fix Tevlo chat buttons and message controls"
+          git push
