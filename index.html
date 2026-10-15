@@ -205,6 +205,94 @@ button:focus-visible{outline:3px solid #31c879!important;outline-offset:2px!impo
 
 /* Dedicated Messages and Calls pages */
 .app-nav{display:grid;gap:7px;padding:0 16px 15px;border-bottom:1px solid #e0e9e3}.app-nav-item{display:flex;align-items:center;gap:11px;width:100%;padding:12px 13px;border-radius:13px;background:transparent;color:#587065;text-align:left;font-weight:750;font-size:13px}.app-nav-item .nav-icon{width:28px;height:28px;display:grid;place-items:center;border-radius:9px;background:#e8f3ec;color:#075b39;font-size:16px}.app-nav-item.active{background:#dff2e5;color:#064a30}.app-nav-item.active .nav-icon{background:#0b5939;color:#fff}.nav-count{margin-left:auto;background:#c7e7d2;color:#075b39;border-radius:20px;padding:3px 8px;font-size:11px}.nav-label{margin-left:auto;color:#839389;font-size:11px;font-weight:550}.page-view{width:100%;height:100%;overflow:auto;padding:clamp(24px,5vw,58px);color:#19372a;background:radial-gradient(ellipse at 90% 0%,#e0f5e7,transparent 34%),#f8fbf9}.page-heading{display:flex;align-items:center;justify-content:space-between;gap:18px;max-width:940px;margin:0 auto 34px}.page-heading h1{font-size:clamp(30px,4vw,42px);letter-spacing:-1.5px;margin:5px 0 8px;color:#064a30}.page-heading p{margin:0;color:#718078}.eyebrow{font-size:10px;font-weight:850;letter-spacing:.16em;color:#0b8050}.page-primary{width:auto;margin:0;white-space:nowrap}.messages-welcome,.calls-empty{max-width:940px;min-height:310px;margin:0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:1px solid #dbe9df;border-radius:26px;background:rgba(255,255,255,.75);padding:35px}.welcome-icon,.calls-empty-icon{width:70px;height:70px;display:grid;place-items:center;border-radius:22px;background:#dff3e6;color:#075b39;font-size:29px}.messages-welcome h2,.calls-empty h2{margin:19px 0 8px;color:#173e2b}.messages-welcome p,.calls-empty p{max-width:400px;line-height:1.6;color:#75847b;margin:0 0 16px}.calls-head-icon{width:62px;height:62px;border-radius:20px;background:#0b5939;color:#fff;display:grid;place-items:center;font-size:25px}.calls-feature{max-width:940px;margin:0 auto 32px;border-radius:22px;padding:25px;display:flex;gap:17px;align-items:center;background:linear-gradient(120deg,#0b5939,#064a30);color:#effff5}.calls-feature-icon{width:52px;height:52px;display:grid;place-items:center;border-radius:16px;background:#ffffff20;font-size:24px}.calls-feature h2{font-size:20px;margin:0 0 6px}.calls-feature p{margin:0;color:#c5e8d2;font-size:13px}.section-heading{max-width:940px;margin:0 auto 12px;display:flex;align-items:center;justify-content:space-between}.section-heading h2{font-size:16px;color:#234532}.section-heading span{font-size:12px;color:#819087}.call-contact-list{max-width:940px;margin:0 auto;display:grid;gap:10px}.call-contact{display:flex;align-items:center;gap:13px;padding:15px;border:1px solid #e0ebe3;background:#fff;border-radius:18px}.call-contact-info{flex:1;min-width:0}.call-contact-info b{display:block;color:#203c2c}.call-contact-info span{display:block;margin-top:4px;color:#859289;font-size:12px}.call-contact-actions{display:flex;gap:7px}.call-page-button{display:flex;align-items:center;gap:7px;border-radius:12px;padding:10px 13px;font-weight:750;font-size:12px;background:#0b5939;color:#f0fff5}.call-page-button.video{background:#e0f3e7;color:#075b39;border:1px solid #c2e4cd}.calls-note{max-width:940px;margin:22px auto 0;display:flex;gap:10px;align-items:flex-start;padding:14px 16px;background:#edf5ef;border-radius:14px;color:#718078;font-size:12px;line-height:1.5}.calls-note>span{width:20px;height:20px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;background:#d2e9d9;color:#075b39;font-weight:800}.calls-note p{margin:1px 0 0}@media(max-width:800px){.app-nav{grid-template-columns:1fr 1fr;padding:0 13px 12px;gap:8px}.app-nav-item{justify-content:center;padding:10px 8px}.nav-label{display:none}.page-view{padding:25px 16px}.page-heading{align-items:flex-start;margin-bottom:24px}.page-heading p{font-size:13px}.page-primary{padding:11px 12px;font-size:12px}.calls-feature{padding:18px;margin-bottom:25px}.call-contact{flex-wrap:wrap}.call-contact-info{min-width:calc(100% - 75px)}.call-contact-actions{width:100%;padding-left:64px}.call-page-button{flex:1;justify-content:center}.messages-welcome,.calls-empty{min-height:280px;padding:24px}}
+
+/* Tevlo cozy-cute polish: soft color, crisp layout, real messaging-app clarity */
+:root{
+ --teal:#19845c;--teal-dark:#116342;--teal-2:#e5f6ec;--teal-3:#c8ecd7;
+ --bg:#f7f5f2;--card:#fffdfb;--text:#25342d;--muted:#7d8981;--line:#e9e6e0;
+ --shadow:0 16px 44px rgba(43,65,51,.09);--radius:22px;
+}
+html,body{background:#f7f5f2!important;color:#25342d!important}
+body{background:radial-gradient(ellipse at 90% 0%,#f4e9f4 0,transparent 28%),radial-gradient(ellipse at 4% 85%,#e8f5e9 0,transparent 34%),#f7f5f2!important}
+button{font-weight:650}
+.auth-wrap{background:radial-gradient(circle at 18% 18%,#f7e9f2 0,transparent 29%),radial-gradient(circle at 86% 82%,#dff4e6 0,transparent 32%),#f7f5f2!important}
+.auth-card{border:1px solid #ebe5e9!important;border-radius:28px!important;background:rgba(255,253,251,.96)!important;box-shadow:0 24px 70px #3a4d3e14!important;padding:36px!important}
+.auth-card:before{height:6px;background:linear-gradient(90deg,#19845c,#8fbd9e,#d7a8cf,#f1c6a9)!important}
+.logo{color:#19845c!important;letter-spacing:-2px!important}
+.tagline{color:#8a8d88!important}
+.tabs{background:#f2edf2!important;border-radius:15px!important}
+.tab.active{background:#fffdfb!important;color:#19845c!important;box-shadow:0 3px 12px #46324b12!important}
+input,textarea{border-color:#e7e5df!important;background:#fbfaf8!important;border-radius:14px!important}
+input:focus,textarea:focus{border-color:#82c4a0!important;box-shadow:0 0 0 4px #e0f4e7!important}
+.primary{background:linear-gradient(135deg,#239b6a,#14764f)!important;border-radius:14px!important;box-shadow:0 7px 16px #18865620!important}
+.secondary{background:#e5f5e9!important;color:#176a48!important;border:1px solid #d5eddd!important}
+.ghost:hover{background:#f5eff5!important}
+.shell{background:#fffdfb!important}
+.sidebar{background:rgba(255,253,251,.98)!important;border-right:1px solid #ebe7e2!important;box-shadow:5px 0 24px #364d3a08!important}
+.side-head{padding-top:23px!important}
+.side-title{color:#176b49!important;letter-spacing:-1.8px!important}
+.side-head .tagline{color:#9a8796!important}
+.icon-btn{background:#f0edf4!important;color:#725a7c!important;border-color:#ebe3ef!important;border-radius:13px!important}
+.icon-btn:hover{background:#e7f4e9!important;color:#176b49!important}
+.app-nav{border-color:#eee8e5!important}
+.app-nav-item{border:1px solid transparent;color:#727e75!important;border-radius:14px!important}
+.app-nav-item .nav-icon{background:#f1edf5!important;color:#876d90!important;border-radius:10px!important}
+.app-nav-item.active{background:#e6f5e9!important;color:#176b49!important;border-color:#d5eedc!important}
+.app-nav-item.active .nav-icon{background:#20875b!important;color:#fff!important}
+.nav-count{background:#d0ecd9!important;color:#176b49!important}
+.search-wrap input{background:#f5f3f0!important;border-color:#f0ece6!important}
+.filter-tab{border-radius:11px!important}
+.filter-tab.active{background:#e6f5e9!important;border-color:#d5eedc!important;color:#176b49!important}
+.request-banner{background:#f7edf6!important;color:#875c80!important;border-color:#eedced!important}
+.conv{border:1px solid transparent!important;border-radius:16px!important}
+.conv:hover{background:#f8f5f7!important}
+.conv.active{background:#e9f6ec!important;box-shadow:inset 3px 0 #239b6a!important}
+.avatar{background:linear-gradient(145deg,#e4f5e9,#d9e9f5)!important;color:#287553!important;border-radius:17px!important}
+.conv:nth-child(3n+2) .avatar{background:linear-gradient(145deg,#f5e6f3,#e7dcf1)!important;color:#8a5c89!important}
+.conv:nth-child(3n) .avatar{background:linear-gradient(145deg,#fff0e1,#f7e1d3)!important;color:#a76a48!important}
+.online-dot{border-color:#fffdfb!important}
+.profile-mini{background:#f7f4f0!important;border-color:#eee8e2!important;border-radius:15px!important}
+.main{background:#fffdfb!important}
+.empty{background:radial-gradient(ellipse at 50% 40%,#f2f8f0 0,#fffdfb 60%)!important}
+.empty-icon,.welcome-icon,.calls-empty-icon{background:linear-gradient(145deg,#e1f5e8,#f3e8f3)!important;color:#25825a!important;border-radius:24px!important}
+.empty-card h2,.messages-welcome h2,.calls-empty h2{color:#2b4937!important;letter-spacing:-.6px}
+.chat-head{background:rgba(255,253,251,.97)!important;border-color:#eee9e3!important}
+.chat-title{color:#294434!important}
+.head-actions .ghost{background:#f4f1f5!important;color:#7b6681!important}
+.call-actions .call-action{background:#e7f5e9!important;color:#19744c!important;border-color:#d6eddd!important}
+.messages{background:linear-gradient(180deg,#fffdfb,#f9f7f4)!important}
+.bubble{border-radius:20px!important}
+.mine .bubble{background:linear-gradient(135deg,#239b6a,#177b52)!important}
+.theirs .bubble{background:#f0edf2!important;color:#35443a!important}
+.composer{background:#fffdfb!important;border-color:#eee9e3!important}
+.tool-round{background:#f0edf4!important;color:#80658a!important;border-color:#e9e2ed!important}
+.tool-round:hover{background:#e6f5e9!important;color:#19744c!important}
+.composer textarea{background:#f7f5f2!important;border-color:#ece7e0!important}
+.composer textarea:focus{background:#fffdfb!important;border-color:#88c9a2!important;box-shadow:0 0 0 4px #e4f5e9!important}
+.round.send{background:linear-gradient(145deg,#28a971,#14764f)!important;border-radius:15px!important}
+.page-view{background:radial-gradient(ellipse at 95% 0%,#f3eaf4 0,transparent 28%),radial-gradient(ellipse at 0% 100%,#e8f5e9 0,transparent 35%),#fbfaf8!important;color:#25342d!important}
+.page-heading h1{color:#23563a!important;letter-spacing:-1.7px!important}
+.eyebrow{color:#a06e9c!important}
+.messages-welcome,.calls-empty{background:rgba(255,253,251,.85)!important;border-color:#ebe5e8!important;border-radius:28px!important;box-shadow:0 10px 34px #3d4d3e08!important}
+.calls-head-icon{background:linear-gradient(145deg,#258e60,#176744)!important;border-radius:21px!important;box-shadow:0 9px 20px #18865622!important}
+.calls-feature{background:linear-gradient(115deg,#1b704a,#2b8c60)!important;border-radius:24px!important;box-shadow:0 12px 30px #1b704a18!important}
+.call-contact{background:rgba(255,253,251,.92)!important;border-color:#eae6e0!important;border-radius:18px!important;transition:transform .16s ease,box-shadow .16s ease}
+.call-contact:hover{transform:translateY(-2px);box-shadow:0 8px 22px #3b594212!important}
+.call-page-button{background:#19845c!important;border-radius:12px!important}
+.call-page-button.video{background:#f2eaf4!important;color:#825c88!important;border-color:#eaddec!important}
+.calls-note{background:#f2edf3!important;color:#7d7180!important;border-radius:15px!important}
+.calls-note>span{background:#e5d8e8!important;color:#805987!important}
+.modal{border-radius:26px!important}
+.toast{background:#294738!important;border:1px solid #466652!important}
+@media(max-width:800px){
+ .sidebar{background:#fffdfb!important}
+ .app-nav-item{background:#f8f5f7!important}
+ .app-nav-item.active{background:#e6f5e9!important}
+ .page-heading{gap:12px}
+ .messages-welcome,.calls-empty{min-height:260px;padding:24px}
+ .calls-feature{border-radius:20px!important}
+ .composer{padding-left:10px!important;padding-right:10px!important}
+}
 </style>
 </head>
 <body><div id="root"></div>
@@ -225,7 +313,7 @@ function renderAuth(mode='login',message=''){authMode=mode;root.innerHTML=`<div 
 function enterDemoMode(){state.user={...demoData.profile};state.profile={...demoData.profile};state.peopleById=Object.fromEntries(demoData.people.map(p=>[p.id,p]));state.conversations=demoData.conversations.map(c=>({...c,profile:state.peopleById[c.friend_id],other_user_id:c.friend_id}));state.friends=demoData.friends;state.demo=true;state.page='messages';renderApp();toast('Demo mode — calls are a preview until you sign in.')}
 async function submitAuth(){if(!SUPABASE_READY){state.user=demoData.profile;state.profile={...demoData.profile};state.peopleById=Object.fromEntries(demoData.people.map(p=>[p.id,p]));state.conversations=demoData.conversations.map(c=>({...c,profile:state.peopleById[c.friend_id]}));state.friends=demoData.friends;renderApp();toast('Demo mode is active.');return}const email=$('#authEmail')?.value.trim(),password=$('#authPassword')?.value;if(!email||!password)return $('#authError').innerHTML='<div class="error">Enter your email and password.</div>';if(authMode==='signup'){const username=$('#authUsername')?.value.trim().replace(/^@/,'').toLowerCase(),name=$('#authName')?.value.trim(),bio=$('#authBio')?.value.trim();if(!username||!name)return $('#authError').innerHTML='<div class="error">Add a username and display name.</div>';const {data,error}=await sb.auth.signUp({email,password,options:{data:{username,real_name:name,bio}}});if(error)return $('#authError').innerHTML=`<div class="error">${esc(error.message)}</div>`;toast(data.session?'Account created.':'Check your email to confirm your account.');if(data.session)afterAuth(data.user);else renderAuth('login','Check your email to finish creating your account.');return}const {data,error}=await sb.auth.signInWithPassword({email,password});if(error)return $('#authError').innerHTML=`<div class="error">${esc(error.message)}</div>`;afterAuth(data.user)}
 async function resetPassword(){if(!SUPABASE_READY)return toast('Connect the login service first.');const email=$('#authEmail')?.value.trim();if(!email)return toast('Enter your email.');const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href});if(error)return $('#authError').innerHTML=`<div class="error">${esc(error.message)}</div>`;toast('Reset link sent. Check your email.')}
-async function afterAuth(user){state.user=user;if(SUPABASE_READY){const {data:p}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();state.profile=p||{id:user.id,real_name:user.email?.split('@')[0],username:user.email?.split('@')[0]};await loadFriends();await loadConversations();try{await sb.from('profiles').update({last_seen:new Date().toISOString()}).eq('id',user.id)}catch(e){}subscribeRealtime();setupCallSignaling()}else startDemo();renderApp()}
+async async function afterAuth(user){state.user=user;if(SUPABASE_READY){const {data:p}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();state.profile=p||{id:user.id,real_name:user.email?.split('@')[0],username:user.email?.split('@')[0]};await loadFriends();await loadConversations();try{await sb.from('profiles').update({last_seen:new Date().toISOString()}).eq('id',user.id)}catch(e){}subscribeRealtime();setupCallSignaling()}else startDemo();renderApp()}
 function startDemo(){state.profile=demoData.profile;state.peopleById=Object.fromEntries(demoData.people.map(p=>[p.id,p]));state.friends=demoData.friends;state.conversations=demoData.conversations.map(c=>({...c,profile:state.peopleById[c.friend_id]}))}
 async function loadFriends(){const uid=state.user.id;const {data}=await sb.from('tevlo_friendships').select('id,requester_id,addressee_id,status').or(`requester_id.eq.${uid},addressee_id.eq.${uid}`).eq('status','accepted');const ids=(data||[]).map(x=>x.requester_id===uid?x.addressee_id:x.requester_id);if(ids.length){const {data:p}=await sb.from('profiles').select('*').in('id',ids);state.peopleById=Object.fromEntries((p||[]).map(x=>[x.id,{...x,name:x.real_name}])) ;state.friends=ids}else{state.peopleById={};state.friends=[]}const {data:req}=await sb.from('tevlo_friendships').select('id,requester_id,addressee_id,status,created_at').eq('addressee_id',uid).eq('status','pending');state.requests=req||[]}
 async function loadConversations(){const uid=state.user.id;const {data:members,error}=await sb.from('tevlo_conversation_members').select('conversation_id').eq('user_id',uid);if(error)return toast(error.message);const ids=(members||[]).map(x=>x.conversation_id);if(!ids.length){state.conversations=[];return}const {data:convs,error:ce}=await sb.from('tevlo_conversations').select('*').in('id',ids).order('updated_at',{ascending:false});if(ce)return toast(ce.message);const others={};for(const c of convs||[]){if(!c.is_group){const {data:m}=await sb.from('tevlo_conversation_members').select('user_id').eq('conversation_id',c.id).neq('user_id',uid).maybeSingle();if(m)others[c.id]=m.user_id}}const otherIds=[...new Set(Object.values(others))];let pmap={};if(otherIds.length){const {data:p}=await sb.from('profiles').select('*').in('id',otherIds);pmap=Object.fromEntries((p||[]).map(x=>[x.id,{...x,name:x.real_name}]))}state.conversations=(convs||[]).map(c=>c.is_group?{...c,name:c.name||'Group chat',profile:null}:{...c,profile:pmap[others[c.id]]||null,name:pmap[others[c.id]]?.name||'Conversation',other_user_id:others[c.id]})}
