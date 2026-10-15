@@ -358,12 +358,12 @@ async function messageActions(msgId){const m=state.messages.find(x=>x.id===msgId
 function showReactionPicker(msgId){document.querySelector('.reaction-picker')?.remove();const p=document.createElement('div');p.className='reaction-picker';p.style.left='50%';p.style.bottom='84px';p.innerHTML=['❤️','👍','😂','😮','😢','🎉'].map(x=>`<button data-react="${x}">${x}</button>`).join('');document.body.appendChild(p);p.onclick=async e=>{const x=e.target.dataset.react;if(!x)return;if(SUPABASE_READY){const {error}=await sb.from('tevlo_message_reactions').upsert({message_id:msgId,user_id:state.user.id,reaction:x});if(error)return toast(error.message)}toast(x);p.remove()};setTimeout(()=>p.remove(),5000)}
 
 let tevloCallChannel=null,tevloCall=null,tevloPendingCall=null;
-function callSignalChannelName(){return 'tevlo-calls-'+state.user?.id}
+function callSignalChannelName(){return 'tevlo-calls'}
 function callSignalSend(to,payload){if(!tevloCallChannel||!to)return Promise.resolve();return tevloCallChannel.send({type:'broadcast',event:'signal',payload:{...payload,to,from:state.user.id}})}
 function setupCallSignaling(){
  if(!SUPABASE_READY||!state.user?.id||!sb?.channel)return;
  if(tevloCallChannel){try{sb.removeChannel(tevloCallChannel)}catch(e){}}
- tevloCallChannel=sb.channel(callSignalChannelName(),{config:{broadcast:{self:false}}});
+ tevloCallChannel=sb.channel(callSignalChannelName(),{config:{private:true,broadcast:{self:false}}});
  tevloCallChannel.on('broadcast',{event:'signal'},({payload})=>handleCallSignal(payload)).subscribe(status=>{if(status==='CHANNEL_ERROR')console.warn('Tevlo call signaling channel error')});
 }
 function showCallOverlay({name,mode,status='Connecting…',incoming=false,video=false}){
