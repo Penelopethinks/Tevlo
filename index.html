@@ -635,7 +635,7 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
 <script id="tevlo-upgrade-patch">
 (()=>{
   const upgradeDefaults={theme:'light',wallpaper:'forest',bubble:'#159f63',accent:'#25c978',sound:'soft',lastSeen:'friends',allowCalls:true,allowMessages:'friends',quietStart:'22:00',quietEnd:'07:00',quietEnabled:false,notifications:true,readReceipts:true,statusText:'',statusVisibility:'friends',pinnedMessages:[],mutedChats:[]};
-  let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0,callOfferRetryTimers=new Map(),callOrphanIce=new Map();
+  let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0,callOfferRetryTimers=new Map(),callOrphanIce=new Map(),callSignalPollTimer=null,callSignalPollBusy=false;
   const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages,baseStartCall=startCall,baseHandleCallSignal=handleCallSignal;
   async function loadUpgradePrefs(){
     upgradePrefs={...upgradeDefaults,...visualDefaults,...JSON.parse(localStorage.getItem('tevlo_preferences')||'{}')};
@@ -675,18 +675,37 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
       const topic=callSignalChannelName(c.id);
       const ch=sb.channel(topic,{config:{private:true,broadcast:{self:false}}});
       ch.on('broadcast',{event:'signal'},({payload})=>handleCallSignal(payload));
-      ch.subscribe(status=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')console.warn('Tevlo call channel issue',topic,status);});
+      ch.subscribe(status=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED')console.warn('Tevlo call channel issue',topic,status);});
       callChannels.set(c.id,ch);
     }
+    startCallSignalPolling();
   };
+  async function startCallSignalPolling(){
+    if(callSignalPollTimer)clearInterval(callSignalPollTimer);
+    const poll=async()=>{
+      if(callSignalPollBusy||!SUPABASE_READY||!state.user?.id)return;
+      callSignalPollBusy=true;
+      try{
+        const cutoff=new Date(Date.now()-120000).toISOString();
+        const {data,error}=await sb.from('tevlo_call_signals').select('id,payload,created_at').eq('recipient_id',state.user.id).gte('created_at',cutoff).order('id',{ascending:true}).limit(100);
+        if(error)throw error;
+        for(const row of data||[]){
+          try{await handleCallSignal(row.payload)}catch(err){console.warn('Call signal handling failed',err)}
+          finally{await sb.from('tevlo_call_signals').delete().eq('id',row.id).eq('recipient_id',state.user.id)}
+        }
+        await sb.from('tevlo_call_signals').delete().eq('recipient_id',state.user.id).lt('created_at',cutoff);
+      }catch(err){console.warn('Tevlo call inbox polling issue',err)}
+      finally{callSignalPollBusy=false}
+    };
+    await poll();
+    callSignalPollTimer=setInterval(poll,900);
+  }
   callSignalSend=async function(to,payload){
-    if(!to||!state.user?.id||!payload?.conversationId)return {status:'error',error:'Missing call recipient or conversation.'};
-    const ch=callChannels.get(payload.conversationId);
-    if(!ch)throw new Error('Call channel is not ready for this conversation. Reopen the chat and try again.');
-    if(ch.state!=='joined')await new Promise((resolve,reject)=>{const end=Date.now()+6000;const check=()=>{if(ch.state==='joined')return resolve();if(Date.now()>end)return reject(new Error('Secure call channel could not connect. Refresh Tevlo and try again.'));setTimeout(check,120)};check()});
-    const result=await ch.send({type:'broadcast',event:'signal',payload:{...payload,to,from:state.user.id}});
-    if(result?.status&&result.status!=='ok')throw new Error('Call signal could not be delivered ('+result.status+').');
-    return result;
+    if(!to||!state.user?.id||!payload?.conversationId)throw new Error('Missing call recipient or conversation.');
+    const signal={...payload,to,from:state.user.id};
+    const {error}=await sb.from('tevlo_call_signals').insert({conversation_id:payload.conversationId,sender_id:state.user.id,recipient_id:to,payload:signal});
+    if(error)throw new Error('Call signal could not be sent: '+error.message);
+    return {status:'ok'};
   };
   function clearCallOfferRetry(callId){const entry=callOfferRetryTimers.get(callId);if(entry){clearInterval(entry.timer);callOfferRetryTimers.delete(callId)}}
   handleCallSignal=async function(p){
