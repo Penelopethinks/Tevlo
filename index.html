@@ -459,7 +459,7 @@ async function startCall(mode){
   tevloCall={mode,peerId:c.other_user_id,conversationId:c.id,callId:crypto.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2),localStream:stream,remoteStream:new MediaStream(),incoming:false,muted:false,cameraOff:false};
   showCallOverlay({name:c.name,mode,status:'Calling…',video:mode==='video'});attachCallMedia();
   const pc=await createCallPeer();
-  await new Promise(resolve=>{if(tevloCallChannel?.state==='joined')resolve();else{const until=Date.now()+5000;const check=()=>{if(!tevloCall||Date.now()>until)return resolve();if(tevloCallChannel?.state==='joined')return resolve();setTimeout(check,100)};check()}});
+  /* The database call inbox is the reliable signaling path; do not block the offer on an unrelated legacy realtime channel. */
   const offer=await pc.createOffer();await pc.setLocalDescription(offer);
   await callSignalSend(tevloCall.peerId,{kind:'offer',callId:tevloCall.callId,conversationId:c.id,mode,data:pc.localDescription.toJSON(),name:state.profile?.name||state.profile?.real_name||'Tevlo user'});
  }catch(err){console.error(err);callError(err?.message||'Could not start the call. Check microphone and camera permissions.');callStatus('Unable to connect');if(tevloCall?.localStream){tevloCall.localStream.getTracks().forEach(t=>t.stop());}await finishCall(false,'Call could not start. Please try again.');}
@@ -687,10 +687,10 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
       callSignalPollBusy=true;
       try{
         const cutoff=new Date(Date.now()-120000).toISOString();
-        const {data,error}=await sb.from('tevlo_call_signals').select('id,payload,created_at').eq('recipient_id',state.user.id).gte('created_at',cutoff).order('id',{ascending:true}).limit(100);
+        const {data,error}=await sb.from('tevlo_call_signals').select('id,payload,created_at,conversation_id,sender_id,recipient_id').eq('recipient_id',state.user.id).gte('created_at',cutoff).order('id',{ascending:true}).limit(100);
         if(error)throw error;
         for(const row of data||[]){
-          try{await handleCallSignal(row.payload)}catch(err){console.warn('Call signal handling failed',err)}
+          try{const payload=row.payload&&typeof row.payload==='object'?row.payload:{};await handleCallSignal({...payload,to:row.recipient_id,from:row.sender_id,conversationId:row.conversation_id})}catch(err){console.warn('Call signal handling failed',err)}
           finally{await sb.from('tevlo_call_signals').delete().eq('id',row.id).eq('recipient_id',state.user.id)}
         }
         await sb.from('tevlo_call_signals').delete().eq('recipient_id',state.user.id).lt('created_at',cutoff);
