@@ -310,6 +310,49 @@ html,body,#root,.app{width:100%;min-width:0;min-height:100%;margin:0}
 .call-video-toggle{background:#e5f2e9;color:#176b49;border-color:#cfe5d6}
 .call-error{color:#b42335}
 </style>
+
+<style id="tevlo-chat-layout-repair">
+/* Cleaner message placement: stable columns, readable bubbles, and actions aligned with each message. */
+#mainPane .messages{
+  display:flex!important;flex-direction:column!important;align-items:stretch!important;
+  gap:12px!important;padding:24px clamp(14px,3vw,36px)!important;
+  overflow-x:hidden!important;overscroll-behavior:contain;
+}
+#mainPane .messages>.row{display:flex!important;width:100%!important;min-width:0!important;align-items:flex-end!important;margin:0!important}
+#mainPane .messages>.row.mine{justify-content:flex-end!important}
+#mainPane .messages>.row.theirs{justify-content:flex-start!important}
+#mainPane .message-stack{display:flex!important;flex-direction:column!important;width:fit-content!important;max-width:min(76%,620px)!important;min-width:0!important}
+#mainPane .bubble{width:fit-content!important;max-width:100%!important;overflow-wrap:anywhere!important;word-break:normal!important;padding:11px 15px!important;line-height:1.45!important;border-radius:18px!important}
+#mainPane .row.mine .bubble{align-self:flex-end!important;border-bottom-right-radius:5px!important}
+#mainPane .row.theirs .bubble{align-self:flex-start!important;border-bottom-left-radius:5px!important}
+#mainPane .meta{max-width:100%;font-size:11px!important;line-height:1.35;margin-top:5px!important;padding:0 3px}
+#mainPane .row.mine .meta,#mainPane .row.mine .message-actions{text-align:right;align-self:flex-end}
+#mainPane .row.theirs .meta,#mainPane .row.theirs .message-actions{text-align:left;align-self:flex-start}
+#mainPane .message-actions{display:flex;flex-wrap:wrap;gap:3px;max-width:100%;margin-top:2px;opacity:.65}
+#mainPane .mini-action{min-height:26px}
+#mainPane .composer{flex-shrink:0;gap:9px;padding:10px 14px max(10px,env(safe-area-inset-bottom))!important;align-items:flex-end}
+#mainPane .composer textarea{min-width:0;min-height:44px;max-height:132px;line-height:1.4}
+#mainPane .composer-tools{flex-shrink:0}
+#mainPane .head-actions{min-width:0;align-items:center;flex-wrap:nowrap}
+#mainPane .call-actions .call-action{display:flex;align-items:center;justify-content:center;gap:6px;padding:0 10px;white-space:nowrap}
+@media(max-width:800px){
+ #mainPane .messages{padding:16px 12px!important;gap:10px!important}
+ #mainPane .message-stack{max-width:86%!important}
+ #mainPane .bubble{padding:10px 13px!important}
+ #mainPane .composer{padding-left:9px!important;padding-right:9px!important;gap:6px}
+ #mainPane .composer-tools{gap:4px}
+ #mainPane .tool-round{width:33px;height:36px}
+ #mainPane .call-actions .call-action{width:auto;min-width:36px;padding:0 8px;font-size:12px}
+ #mainPane .head-actions{gap:2px}
+}
+@media(max-width:390px){
+ #mainPane .call-actions .call-action span:not(.call-symbol){display:none}
+ #mainPane .message-stack{max-width:90%!important}
+}
+[data-tevlo-incoming-banner]{box-sizing:border-box;max-width:calc(100vw - 20px);flex-wrap:wrap}
+[data-tevlo-incoming-banner] button{min-height:40px;white-space:nowrap}
+</style>
+
 </head>
 <body><div id="root"></div>
 <script>
@@ -690,8 +733,18 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
         const {data,error}=await sb.from('tevlo_call_signals').select('id,payload,created_at,conversation_id,sender_id,recipient_id').eq('recipient_id',state.user.id).gte('created_at',cutoff).order('id',{ascending:true}).limit(100);
         if(error)throw error;
         for(const row of data||[]){
-          try{const payload=row.payload&&typeof row.payload==='object'?row.payload:{};await handleCallSignal({...payload,to:row.recipient_id,from:row.sender_id,conversationId:row.conversation_id})}catch(err){console.warn('Call signal handling failed',err)}
-          finally{await sb.from('tevlo_call_signals').delete().eq('id',row.id).eq('recipient_id',state.user.id)}
+          let handled=false;
+          try{
+            const payload=row.payload&&typeof row.payload==='object'?row.payload:{};
+            const signal={...payload,to:row.recipient_id,from:row.sender_id,conversationId:row.conversation_id};
+            if(!signal.kind||!signal.callId||!signal.from||!signal.to)throw new Error('Call inbox row is missing required signal fields.');
+            await handleCallSignal(signal);
+            handled=true;
+          }catch(err){console.warn('Call signal handling failed; keeping it in the inbox for retry',row.id,err)}
+          if(handled){
+            const {error:deleteError}=await sb.from('tevlo_call_signals').delete().eq('id',row.id).eq('recipient_id',state.user.id);
+            if(deleteError)console.warn('Could not acknowledge call signal',row.id,deleteError);
+          }
         }
         await sb.from('tevlo_call_signals').delete().eq('recipient_id',state.user.id).lt('created_at',cutoff);
       }catch(err){console.warn('Tevlo call inbox polling issue',err)}
