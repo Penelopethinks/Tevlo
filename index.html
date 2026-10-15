@@ -177,7 +177,7 @@ async function handleCallSignal(p){
  if(!tevloCall||p.callId!==tevloCall.callId)return;
  try{
   if(p.kind==='answer'){await tevloCall.pc.setRemoteDescription(new RTCSessionDescription(p.data));callStatus('Connecting…');for(const candidate of tevloCall.queuedIce||[])await tevloCall.pc.addIceCandidate(new RTCIceCandidate(candidate));tevloCall.queuedIce=[]}
-  if(p.kind==='ice'){if(tevloCall.pc?.remoteDescription)await tevloCall.pc.addIceCandidate(new RTCIceCandidate(p.data));else(tevloCall.queuedIce||=[]).push(p.data)}
+  if(p.kind==='ice'){if(tevloCall?.callId===p.callId){if(tevloCall.pc?.remoteDescription)await tevloCall.pc.addIceCandidate(new RTCIceCandidate(p.data));else(tevloCall.queuedIce||=[]).push(p.data)}else if(tevloPendingCall?.callId===p.callId)(tevloPendingCall.queuedIce||=[]).push(p.data);}
   if(p.kind==='hangup'||p.kind==='decline'||p.kind==='busy'){const msg=p.kind==='busy'?'User is busy':p.kind==='decline'?'Call declined':'Call ended';finishCall(false,msg)}
  }catch(err){console.error('Call signaling error',err);callError('Connection error. Please end the call and try again.')}
 }
@@ -186,7 +186,7 @@ async function acceptIncomingCall(){
  if(!navigator.mediaDevices?.getUserMedia)return callError('This browser does not support microphone or camera access.');
  try{
   const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:p.mode==='video'});
-  tevloCall={mode:p.mode||'audio',peerId:p.from,conversationId:p.conversationId,callId:p.callId,localStream:stream,remoteStream:new MediaStream(),incoming:true,muted:false,cameraOff:false};tevloPendingCall=null;
+  tevloCall={mode:p.mode||'audio',peerId:p.from,conversationId:p.conversationId,callId:p.callId,localStream:stream,remoteStream:new MediaStream(),incoming:true,muted:false,cameraOff:false,queuedIce:p.queuedIce||[]};tevloPendingCall=null;
   showCallOverlay({name:p.name,mode:tevloCall.mode,status:'Connecting…',video:tevloCall.mode==='video'});attachCallMedia();
   const pc=await createCallPeer();await pc.setRemoteDescription(new RTCSessionDescription(p.data));
   for(const candidate of tevloCall.queuedIce||[])await pc.addIceCandidate(new RTCIceCandidate(candidate));tevloCall.queuedIce=[];
