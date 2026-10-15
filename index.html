@@ -596,8 +596,11 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     localStorage.setItem('tevlo_preferences',JSON.stringify(upgradePrefs));applyUpgradePrefs();customApplyPrefs();
   }
   async function saveUpgradePrefs(patch){
-    upgradePrefs={...upgradePrefs,...patch};localStorage.setItem('tevlo_preferences',JSON.stringify(upgradePrefs));applyUpgradePrefs();
-    if(SUPABASE_READY&&state.user?.id){const {error}=await sb.from('tevlo_user_settings').upsert({user_id:state.user.id,preferences:upgradePrefs,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)toast('Saved on this device; cloud sync failed.');}
+    upgradePrefs={...upgradePrefs,...patch};
+    if(Object.prototype.hasOwnProperty.call(patch,'notifications'))state.notifications=!!upgradePrefs.notifications;
+    if(Object.prototype.hasOwnProperty.call(patch,'readReceipts'))state.readReceipts=!!upgradePrefs.readReceipts;
+    localStorage.setItem('tevlo_preferences',JSON.stringify(upgradePrefs));applyUpgradePrefs();customApplyPrefs();
+    if(SUPABASE_READY&&state.user?.id&&upgradePrefs.syncPreferences!==false){const {error}=await sb.from('tevlo_user_settings').upsert({user_id:state.user.id,preferences:upgradePrefs,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)toast('Saved on this device; cloud sync failed.');}
   }
   function applyUpgradePrefs(){
     const rootStyle=document.documentElement.style;
@@ -968,6 +971,16 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     document.body.classList.toggle('dark',p.theme!=='light');
     const rules=[];
     rules.push('.main,.messages{background:var(--tv-chat-bg)!important}');
+    rules.push('body{background:var(--tv-page-bg)!important;color:var(--tv-text)!important}');
+    rules.push('.sidebar{background:var(--tv-sidebar-bg)!important;color:var(--tv-text)!important}');
+    rules.push('.modal,.chat-head,.composer,.chat-menu,.message-menu,.reaction-picker{background:var(--tv-panel-bg)!important;border-color:var(--tv-line)!important}');
+    rules.push('.modal,.settings-card,.conv,.icon-btn,.tool-round{border-radius:var(--tv-radius)!important}');
+    rules.push('.modal{box-shadow:'+(p.shadow==='none'?'none':p.shadow==='strong'?'0 18px 60px rgba(0,0,0,.38)':'0 10px 28px rgba(0,0,0,.15)')+'!important}');
+    rules.push('body[data-tv-motion="reduced"] *,body[data-tv-motion="reduced"] *:before,body[data-tv-motion="reduced"] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}');
+    rules.push('body[data-tv-contrast="high"] .stat,body[data-tv-contrast="high"] .meta,body[data-tv-contrast="high"] .chat-sub{color:var(--tv-text)!important}');
+    rules.push('body[data-tv-density="compact"] .conv{padding-top:5px!important;padding-bottom:5px!important}body[data-tv-density="comfortable"] .conv{padding-top:16px!important;padding-bottom:16px!important}');
+    rules.push('body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,var(--tv-wallpaper-color-1,var(--tv-chat-bg)),var(--tv-wallpaper-color-2,var(--tv-chat-bg)),var(--tv-wallpaper-color-3,var(--tv-chat-bg)))!important}');
+    rules.push('.profile-cover{background:linear-gradient(135deg,var(--tv-profile-cover-1),var(--tv-profile-cover-2))!important}');
     if(p.wallpaperCustomEnabled)rules.push('.messages{background:linear-gradient(135deg,var(--tv-wallpaper-color-1),var(--tv-wallpaper-color-2),var(--tv-wallpaper-color-3))!important}');
     rules.push('.side-title,.chat-title,.conv-name,.modal h2{color:var(--tv-text)!important}');
     rules.push('.stat,.meta,.chat-sub,.conv-preview,.conv-time,.tagline{color:var(--tv-muted)!important}');
@@ -1109,10 +1122,18 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     const now=new Date(),toMinutes=t=>{const [h,m]=String(t||'00:00').split(':').map(Number);return h*60+m},mins=now.getHours()*60+now.getMinutes();
     const start=toMinutes(upgradePrefs.quietStart),end=toMinutes(upgradePrefs.quietEnd);
     const quiet=upgradePrefs.quietEnabled&&(start<=end?(mins>=start&&mins<end):(mins>=start||mins<end));
+    const noticeTitle=String(title||'').toLowerCase();
     if(quiet||upgradePrefs.notifications===false)return;
+    if(noticeTitle.includes('call')&&upgradePrefs.notifyCalls===false)return;
+    if((noticeTitle.includes('message')||noticeTitle.includes('chat'))&&upgradePrefs.notifyMessages===false)return;
+    if(noticeTitle.includes('request')&&upgradePrefs.notifyFriendRequests===false)return;
+    if((noticeTitle.includes('group')||noticeTitle.includes('event'))&&upgradePrefs.notifyGroupEvents===false)return;
     if(state.active&&upgradePrefs.mutedChats?.includes(state.active))return;
-    if(upgradePrefs.sound!=='off'&&window.AudioContext){try{const ctx=new AudioContext(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.value=upgradePrefs.sound==='pop'?740:520;gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.035,ctx.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.16);osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.18);osc.onended=()=>ctx.close()}catch(e){}}
-    return oldPushNotification(title,body);
+    if(upgradePrefs.sound!=='off'&&Number(upgradePrefs.notifySoundVolume??35)>0&&window.AudioContext){try{const ctx=new AudioContext(),osc=ctx.createOscillator(),gain=ctx.createGain();osc.type='sine';osc.frequency.value=upgradePrefs.sound==='pop'?740:upgradePrefs.sound==='bell'?880:upgradePrefs.sound==='digital'?660:520;gain.gain.setValueAtTime(.0001,ctx.currentTime);gain.gain.exponentialRampToValueAtTime(Math.max(.0001,Math.min(.08,Number(upgradePrefs.notifySoundVolume??35)/100*.08)),ctx.currentTime+.02);gain.gain.exponentialRampToValueAtTime(.0001,ctx.currentTime+.16);osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.18);osc.onended=()=>ctx.close()}catch(e){}}
+    const priorNotificationSetting=state.notifications;
+    if(upgradePrefs.notifyDesktop===false)state.notifications=false;
+    try{return oldPushNotification(title,upgradePrefs.notifyPreviews===false?'New Tevlo activity':body)}
+    finally{state.notifications=priorNotificationSetting}
   };
   document.addEventListener('click',async e=>{
     const mute=e.target.closest('#muteChat');if(!mute)return;
