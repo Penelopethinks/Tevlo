@@ -506,5 +506,128 @@ document.addEventListener("keydown",e=>{if(e.target?.id==="composerText"&&e.key=
 
 })();
 </script>
+
+<style id="tevlo-upgrade-styles">
+.upgrade-tools{display:flex;gap:7px;padding:8px 14px;background:#0d2d20;border-bottom:1px solid #245641;flex-wrap:wrap}
+.upgrade-tools button{border:1px solid #245641;background:#123f2c;color:#c9f6dc;border-radius:10px;padding:8px 11px;font-weight:700;font-size:12px}
+.upgrade-tools button:hover{background:#18563b}
+.upgrade-field{margin:10px 0}
+.upgrade-field label{color:#9bcbb0}
+.upgrade-note{font-size:12px;color:#a9d8bd;margin-top:6px}
+.upgrade-reactions{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
+.upgrade-reaction{font-size:11px;background:#123f2c;color:#c9f6dc;border:1px solid #245641;border-radius:9px;padding:3px 6px}
+.upgrade-pin{font-size:11px;color:#55e69a;margin:0 0 4px}
+.call-duration{font-size:12px;color:#8fe8b5;margin-top:6px}
+</style>
+<script id="tevlo-upgrade-patch">
+(()=>{
+  const upgradeDefaults={theme:'dark-green',wallpaper:'forest',bubble:'#159f63',accent:'#25c978',sound:'soft',lastSeen:'friends',allowCalls:true,allowMessages:'friends',quietStart:'22:00',quietEnd:'07:00',quietEnabled:false,notifications:true,readReceipts:true,statusText:'',statusVisibility:'friends',pinnedMessages:[],mutedChats:[]};
+  let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0;
+  const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages;
+  async function loadUpgradePrefs(){
+    upgradePrefs={...upgradeDefaults,...JSON.parse(localStorage.getItem('tevlo_preferences')||'{}')};
+    if(SUPABASE_READY&&state.user?.id){
+      try{const {data}=await sb.from('tevlo_user_settings').select('preferences').eq('user_id',state.user.id).maybeSingle();if(data?.preferences)upgradePrefs={...upgradePrefs,...data.preferences};}catch(e){console.warn('Preferences load issue',e)}
+    }
+    localStorage.setItem('tevlo_preferences',JSON.stringify(upgradePrefs));applyUpgradePrefs();
+  }
+  async function saveUpgradePrefs(patch){
+    upgradePrefs={...upgradePrefs,...patch};localStorage.setItem('tevlo_preferences',JSON.stringify(upgradePrefs));applyUpgradePrefs();
+    if(SUPABASE_READY&&state.user?.id){const {error}=await sb.from('tevlo_user_settings').upsert({user_id:state.user.id,preferences:upgradePrefs,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(error)toast('Saved on this device; cloud sync failed.');}
+  }
+  function applyUpgradePrefs(){
+    const rootStyle=document.documentElement.style;
+    if(/^#[0-9a-f]{6}$/i.test(upgradePrefs.accent||'')){rootStyle.setProperty('--teal',upgradePrefs.accent);rootStyle.setProperty('--teal-dark',upgradePrefs.accent)}
+    if(/^#[0-9a-f]{6}$/i.test(upgradePrefs.bubble||''))rootStyle.setProperty('--bubble-custom',upgradePrefs.bubble);
+    document.body.classList.toggle('dark',upgradePrefs.theme==='dark-green'||upgradePrefs.theme==='dark');
+    document.body.dataset.wallpaper=upgradePrefs.wallpaper||'forest';
+    const msg=document.querySelector('.messages');if(msg){msg.style.backgroundImage=upgradePrefs.wallpaper==='ocean'?'linear-gradient(135deg,#082a39,#0a302a)':upgradePrefs.wallpaper==='sunset'?'linear-gradient(135deg,#352038,#492b2c)':upgradePrefs.wallpaper==='stars'?'radial-gradient(circle at 20% 20%,#24402e 1px,transparent 2px),linear-gradient(135deg,#071b14,#102a24)':upgradePrefs.wallpaper==='plain'?'none':'linear-gradient(145deg,#071f16,#0b2b1e,#08251a)';}
+  }
+  afterAuth=async function(user){await oldAfterAuth(user);await loadUpgradePrefs();setupCallSignaling();};
+  callSignalChannelName=function(conversationId){return 'tevlo-call-'+conversationId};
+  setupCallSignaling=function(){
+    if(!SUPABASE_READY||!state.user?.id||!sb?.channel)return;
+    for(const ch of callChannels.values()){try{sb.removeChannel(ch)}catch(e){}}
+    callChannels.clear();
+    for(const c of (state.conversations||[]).filter(x=>!x.is_self)){
+      const topic=callSignalChannelName(c.id);
+      const ch=sb.channel(topic,{config:{private:true,broadcast:{self:false}}});
+      ch.on('broadcast',{event:'signal'},({payload})=>handleCallSignal(payload));
+      ch.subscribe(status=>{if(status==='CHANNEL_ERROR'||status==='TIMED_OUT')console.warn('Tevlo call channel issue',topic,status);});
+      callChannels.set(c.id,ch);
+    }
+  };
+  callSignalSend=async function(to,payload){
+    if(!to||!state.user?.id||!payload?.conversationId)return {status:'error',error:'Missing call recipient or conversation.'};
+    const ch=callChannels.get(payload.conversationId);
+    if(!ch)throw new Error('Call channel is not ready for this conversation. Reopen the chat and try again.');
+    if(ch.state!=='joined')await new Promise((resolve,reject)=>{const end=Date.now()+6000;const check=()=>{if(ch.state==='joined')return resolve();if(Date.now()>end)return reject(new Error('Secure call channel could not connect. Refresh Tevlo and try again.'));setTimeout(check,120)};check()});
+    const result=await ch.send({type:'broadcast',event:'signal',payload:{...payload,to,from:state.user.id}});
+    if(result?.status&&result.status!=='ok')throw new Error('Call signal could not be delivered ('+result.status+').');
+    return result;
+  };
+  renderChat=async function(c){
+    await oldRenderChat(c);
+    if(c?.is_group){
+      const tools=document.createElement('div');tools.className='upgrade-tools';tools.innerHTML='<button id="tevloGroupPoll">＋ Create poll</button><button id="tevloGroupEvent">＋ Plan event</button><button id="tevloGroupDetails">Group details</button>';
+      const head=$('#mainPane .chat-head');if(head)head.insertAdjacentElement('afterend',tools);
+      $('#tevloGroupPoll')?.addEventListener('click',()=>groupPollModal(c));
+      $('#tevloGroupEvent')?.addEventListener('click',()=>groupEventModal(c));
+      $('#tevloGroupDetails')?.addEventListener('click',()=>groupDetailsModal(c));
+    }
+  };
+  settingsModal=function(){
+    showModal('<div class="modal-head"><h2>Tevlo settings</h2><button class="ghost" data-close>✕</button></div><p class="upgrade-note">Your preferences sync to your Tevlo account when connected.</p><div class="upgrade-field"><label>Interface theme</label><select id="prefTheme"><option value="dark-green">Forest dark</option><option value="light">Light</option><option value="dark">Dark</option></select></div><div class="upgrade-field"><label>Chat wallpaper</label><select id="prefWallpaper"><option value="forest">Forest glow</option><option value="plain">Plain</option><option value="ocean">Ocean</option><option value="sunset">Sunset</option><option value="stars">Star field</option></select></div><div class="upgrade-field"><label>Accent color</label><input id="prefAccent" type="color" value="#25c978"></div><div class="upgrade-field"><label>Message bubble color</label><input id="prefBubble" type="color" value="#159f63"></div><div class="upgrade-field"><label>Who can call you?</label><select id="prefCalls"><option value="true">Friends and people I chat with</option><option value="false">Nobody</option></select></div><div class="upgrade-field"><label>Who can message you?</label><select id="prefMessages"><option value="friends">Friends</option><option value="everyone">Everyone on Tevlo</option></select></div><div class="upgrade-field"><label>Last seen visibility</label><select id="prefSeen"><option value="friends">Friends</option><option value="nobody">Nobody</option><option value="everyone">Everyone</option></select></div><div class="upgrade-field"><label>Profile status</label><input id="prefStatus" maxlength="80" placeholder="What are you up to?"></div><div class="upgrade-field"><label>Status visibility</label><select id="prefStatusVisibility"><option value="friends">Friends</option><option value="everyone">Everyone</option><option value="nobody">Nobody</option></select></div><div class="upgrade-field"><label>Quiet hours start</label><input id="prefQuietStart" type="time"></div><div class="upgrade-field"><label>Quiet hours end</label><input id="prefQuietEnd" type="time"></div><div class="settings-row"><b>Enable quiet hours</b><button class="switch" id="prefQuietEnabled" aria-label="Enable quiet hours"></button></div><div class="settings-row"><b>Browser notifications</b><button class="switch" id="prefNotifications" aria-label="Browser notifications"></button></div><div class="settings-row"><b>Read receipts</b><button class="switch" id="prefReadReceipts" aria-label="Read receipts"></button></div><button class="primary" id="saveUpgradePrefs">Save preferences</button><button class="secondary" id="openProfileUpgrade">Edit profile</button><button class="ghost" id="settingsSignout">Sign out</button>');
+    const set=(id,v)=>{const el=$('#'+id);if(el)el.value=String(v)};
+    set('prefTheme',upgradePrefs.theme);set('prefWallpaper',upgradePrefs.wallpaper);set('prefAccent',upgradePrefs.accent);set('prefBubble',upgradePrefs.bubble);set('prefCalls',upgradePrefs.allowCalls);set('prefMessages',upgradePrefs.allowMessages);set('prefSeen',upgradePrefs.lastSeen);set('prefStatus',upgradePrefs.statusText);set('prefStatusVisibility',upgradePrefs.statusVisibility);set('prefQuietStart',upgradePrefs.quietStart);set('prefQuietEnd',upgradePrefs.quietEnd);
+    for(const [id,key] of [['prefQuietEnabled','quietEnabled'],['prefNotifications','notifications'],['prefReadReceipts','readReceipts']]){$('#'+id)?.classList.toggle('on',!!upgradePrefs[key]);$('#'+id).onclick=()=>$('#'+id).classList.toggle('on')}
+    $('#saveUpgradePrefs').onclick=async()=>{await saveUpgradePrefs({theme:$('#prefTheme').value,wallpaper:$('#prefWallpaper').value,accent:$('#prefAccent').value,bubble:$('#prefBubble').value,allowCalls:$('#prefCalls').value==='true',allowMessages:$('#prefMessages').value,lastSeen:$('#prefSeen').value,statusText:$('#prefStatus').value.trim(),statusVisibility:$('#prefStatusVisibility').value,quietStart:$('#prefQuietStart').value||'22:00',quietEnd:$('#prefQuietEnd').value||'07:00',quietEnabled:$('#prefQuietEnabled').classList.contains('on'),notifications:$('#prefNotifications').classList.contains('on'),readReceipts:$('#prefReadReceipts').classList.contains('on')});state.notifications=upgradePrefs.notifications;state.readReceipts=upgradePrefs.readReceipts;closeModal();toast('Preferences saved.');renderApp()};
+    $('#openProfileUpgrade').onclick=()=>{closeModal();profileModal()};
+    $('#settingsSignout').onclick=async()=>{if(SUPABASE_READY)await sb.auth.signOut();location.reload()};
+  };
+  renderMessages=async function(){
+    await oldRenderMessages();
+    const wrap=$('#messages');if(!wrap||!SUPABASE_READY||!state.messages?.length)return;
+    const ids=state.messages.map(m=>m.id).filter(id=>/^[0-9a-f-]{36}$/i.test(id));if(!ids.length)return;
+    try{const {data,error}=await sb.from('tevlo_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);if(error||!data?.length)return;
+      const by={};for(const r of data)(by[r.message_id]||=[]).push(r);
+      for(const [id,reactions] of Object.entries(by)){const row=wrap.querySelector('[data-msg="'+CSS.escape(id)+'"] .message-stack');if(!row)continue;const strip=document.createElement('div');strip.className='upgrade-reactions';strip.innerHTML=[...new Set(reactions.map(r=>r.reaction))].map(emoji=>'<button class="upgrade-reaction" data-reaction-msg="'+id+'" data-reaction="'+esc(emoji)+'">'+esc(emoji)+' '+reactions.filter(r=>r.reaction===emoji).length+'</button>').join('');row.appendChild(strip)}
+    }catch(e){console.warn('Could not load message reactions',e)}
+  };
+  function groupPollModal(c){
+    showModal('<div class="modal-head"><h2>Group poll</h2><button class="ghost" data-close>✕</button></div><label>Question</label><input id="pollQuestion" maxlength="300" placeholder="What should we do?"><label>Options (one per line)</label><textarea id="pollOptions" rows="4" placeholder="Go bowling&#10;Movie night"></textarea><button class="primary" id="createPollNow">Create poll</button><div id="pollList" class="settings-card">Loading polls…</div>');
+    const refresh=async()=>{const {data,error}=await sb.from('tevlo_group_polls').select('*').eq('conversation_id',c.id).order('created_at',{ascending:false});const el=$('#pollList');if(!el)return;if(error){el.textContent='Polls could not load: '+error.message;return}if(!data?.length){el.textContent='No polls yet.';return}el.innerHTML=data.map(p=>'<div class="settings-card"><b>'+esc(p.question)+'</b><div class="choice-list">'+p.options.map((o,i)=>'<button class="choice-row" data-vote-poll="'+p.id+'" data-vote-index="'+i+'">'+esc(o)+'</button>').join('')+'</div></div>').join('')};
+    $('#createPollNow').onclick=async()=>{const question=$('#pollQuestion').value.trim(),options=$('#pollOptions').value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,8);if(!question||options.length<2)return toast('Add a question and at least two options.');const {error}=await sb.from('tevlo_group_polls').insert({conversation_id:c.id,created_by:state.user.id,question,options});if(error)return toast('Could not create poll: '+error.message);$('#pollQuestion').value='';$('#pollOptions').value='';await refresh();toast('Poll created.')};
+    $('#pollList').onclick=async e=>{const b=e.target.closest('[data-vote-poll]');if(!b)return;const {error}=await sb.from('tevlo_group_poll_votes').upsert({poll_id:b.dataset.votePoll,user_id:state.user.id,option_index:Number(b.dataset.voteIndex)},{onConflict:'poll_id,user_id'});if(error)return toast('Could not vote: '+error.message);toast('Vote saved.')};refresh();
+  }
+  function groupEventModal(c){
+    showModal('<div class="modal-head"><h2>Plan a group event</h2><button class="ghost" data-close>✕</button></div><label>Event title</label><input id="eventTitle" maxlength="180" placeholder="Game night"><label>When?</label><input id="eventDate" type="datetime-local"><label>Details</label><textarea id="eventDetails" rows="3" placeholder="Place, plans, or what to bring"></textarea><button class="primary" id="saveGroupEvent">Create event</button><div id="eventList" class="settings-card">Loading events…</div>');
+    const refresh=async()=>{const {data,error}=await sb.from('tevlo_group_events').select('*').eq('conversation_id',c.id).order('starts_at',{ascending:true});const el=$('#eventList');if(!el)return;if(error){el.textContent='Events could not load: '+error.message;return}el.innerHTML=data?.length?data.map(x=>'<div class="settings-card"><b>'+esc(x.title)+'</b><div class="stat">'+esc(x.starts_at?new Date(x.starts_at).toLocaleString():'Time not set')+'</div><p>'+esc(x.details||'')+'</p></div>').join(''):'No events planned yet.'};
+    $('#saveGroupEvent').onclick=async()=>{const title=$('#eventTitle').value.trim();if(!title)return toast('Enter an event title.');const dt=$('#eventDate').value;const {error}=await sb.from('tevlo_group_events').insert({conversation_id:c.id,created_by:state.user.id,title,details:$('#eventDetails').value.trim(),starts_at:dt?new Date(dt).toISOString():null});if(error)return toast('Could not create event: '+error.message);$('#eventTitle').value='';await refresh();toast('Event added.')};refresh();
+  }
+  function groupDetailsModal(c){
+    showModal('<div class="modal-head"><h2>Group details</h2><button class="ghost" data-close>✕</button></div><label>Group name</label><input id="groupEditName" maxlength="100"><label>Description</label><textarea id="groupEditDescription" maxlength="500" rows="3" placeholder="What is this group for?"></textarea><button class="primary" id="saveGroupDetails">Save group details</button>');
+    $('#groupEditName').value=c.name||'';$('#groupEditDescription').value=c.description||'';
+    $('#saveGroupDetails').onclick=async()=>{const name=$('#groupEditName').value.trim()||'Group chat',description=$('#groupEditDescription').value.trim();const {error}=await sb.from('tevlo_conversations').update({name,description}).eq('id',c.id);if(error)return toast('Could not save group details: '+error.message);c.name=name;c.description=description;closeModal();renderApp();toast('Group details saved.')};
+  }
+  document.addEventListener('click',async e=>{
+    const reaction=e.target.closest('[data-reaction-msg]');if(reaction){e.preventDefault();const {error}=await sb.from('tevlo_message_reactions').upsert({message_id:reaction.dataset.reactionMsg,user_id:state.user.id,reaction:reaction.dataset.reaction},{onConflict:'message_id,user_id'});if(error)return toast('Reaction failed.');await renderMessages();return}
+    const pin=e.target.closest('[data-more-msg]');if(pin){const id=pin.dataset.moreMsg;const action=prompt('Type edit, delete, pin, or cancel');if(action==='pin'){const pinned=new Set(upgradePrefs.pinnedMessages||[]);pinned.has(id)?pinned.delete(id):pinned.add(id);await saveUpgradePrefs({pinnedMessages:[...pinned]});toast(pinned.has(id)?'Message pinned on your account.':'Message unpinned.');return}}
+  },true);
+  const oldStartCall=startCall;
+  startCall=async function(mode){
+    if(!upgradePrefs.allowCalls)return toast('Calls are disabled in your privacy settings.');
+    if(tevloCall)return toast('Finish your current call first.');
+    await oldStartCall(mode);
+    if(tevloCall){callStartedAt=Date.now();clearInterval(callDurations);callDurations=setInterval(()=>{if(!tevloCall){clearInterval(callDurations);return}const el=$('#callStatus');if(el&&tevloCall.pc?.connectionState==='connected'){const sec=Math.floor((Date.now()-callStartedAt)/1000);el.textContent='Connected · '+String(Math.floor(sec/60)).padStart(2,'0')+':'+String(sec%60).padStart(2,'0')}},1000)}
+  };
+  const oldFinishCall=finishCall;
+  finishCall=async function(notify=true,message='Call ended'){clearInterval(callDurations);callDurations=null;return oldFinishCall(notify,message)};
+  // Ensure the call panel is always wired to conversation-specific private channels after conversations refresh.
+  const oldLoadConversations=loadConversations;
+  loadConversations=async function(){await oldLoadConversations();if(state.user?.id)setupCallSignaling()};
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&state.user?.id)setupCallSignaling()});
+})();
+</script>
 </body>
 </html>
