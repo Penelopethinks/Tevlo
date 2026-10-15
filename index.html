@@ -174,6 +174,7 @@ async function handleCallSignal(p){
   showCallOverlay({name,mode:p.mode||'audio',status:'Incoming call',incoming:true,video:p.mode==='video'});
   return;
  }
+ if(p.kind==='ice'&&!tevloCall&&tevloPendingCall?.callId===p.callId){(tevloPendingCall.queuedIce||=[]).push(p.data);return}
  if(!tevloCall||p.callId!==tevloCall.callId)return;
  try{
   if(p.kind==='answer'){await tevloCall.pc.setRemoteDescription(new RTCSessionDescription(p.data));callStatus('Connecting…');for(const candidate of tevloCall.queuedIce||[])await tevloCall.pc.addIceCandidate(new RTCIceCandidate(candidate));tevloCall.queuedIce=[]}
