@@ -318,7 +318,7 @@ function ensureSelfNotes(){if(!state.user||!state.profile)return;const id='tevlo
 function startDemo(){state.profile=demoData.profile;state.peopleById=Object.fromEntries(demoData.people.map(p=>[p.id,p]));state.friends=demoData.friends;state.conversations=demoData.conversations.map(c=>({...c,profile:state.peopleById[c.friend_id]}))}
 async function loadFriends(){const uid=state.user.id;const {data}=await sb.from('tevlo_friendships').select('id,requester_id,addressee_id,status').or(`requester_id.eq.${uid},addressee_id.eq.${uid}`).eq('status','accepted');const ids=(data||[]).map(x=>x.requester_id===uid?x.addressee_id:x.requester_id);if(ids.length){const {data:p}=await sb.from('profiles').select('*').in('id',ids);state.peopleById=Object.fromEntries((p||[]).map(x=>[x.id,{...x,name:x.real_name}])) ;state.friends=ids}else{state.peopleById={};state.friends=[]}const {data:req}=await sb.from('tevlo_friendships').select('id,requester_id,addressee_id,status,created_at').eq('addressee_id',uid).eq('status','pending');state.requests=req||[]}
 async function loadConversations(){const uid=state.user.id;const {data:members,error}=await sb.from('tevlo_conversation_members').select('conversation_id').eq('user_id',uid);if(error)return toast(error.message);const ids=(members||[]).map(x=>x.conversation_id);if(!ids.length){state.conversations=[];return}const {data:convs,error:ce}=await sb.from('tevlo_conversations').select('*').in('id',ids).order('updated_at',{ascending:false});if(ce)return toast(ce.message);const others={};for(const c of convs||[]){if(!c.is_group){const {data:m}=await sb.from('tevlo_conversation_members').select('user_id').eq('conversation_id',c.id).neq('user_id',uid).maybeSingle();if(m)others[c.id]=m.user_id}}const otherIds=[...new Set(Object.values(others))];let pmap={};if(otherIds.length){const {data:p}=await sb.from('profiles').select('*').in('id',otherIds);pmap=Object.fromEntries((p||[]).map(x=>[x.id,{...x,name:x.real_name}]))}state.conversations=(convs||[]).map(c=>c.is_group?{...c,name:c.name||'Group chat',profile:null}:{...c,profile:pmap[others[c.id]]||null,name:pmap[others[c.id]]?.name||'Conversation',other_user_id:others[c.id]})}
-function renderApp(){root.innerHTML=`<div class="app"><div class="shell" id="shell"><aside class="sidebar"><div class="side-head"><div><div class="side-title">Tevlo</div><div class="tagline" style="margin:0">Just talk.</div></div><div class="head-icon-group"><button class="icon-btn" id="notificationsBtn" title="Notifications">◌</button><button class="icon-btn" id="peopleBtn" title="Find people">♙</button><button class="icon-btn" id="newChat" title="New message">✎</button></div></div><nav class="app-nav" aria-label="Main navigation"><button class="app-nav-item active" id="messagesPageBtn"><span class="nav-icon">▤</span><span>Messages</span><span class="nav-count">${state.conversations.length}</span></button><button class="app-nav-item" id="callsPageBtn"><span class="nav-icon">☎</span><span>Calls</span><span class="nav-label">Voice & video</span></button></nav><div class="search-wrap"><input id="searchPeople" placeholder="Search conversations or people"></div><div class="filter-tabs"><button data-filter="all" class="filter-tab active">All</button><button data-filter="unread" class="filter-tab">Unread</button><button data-filter="groups" class="filter-tab">Groups</button><button data-filter="favorites" class="filter-tab">Favorites</button></div>${state.requests.length?`<div class="requests"><button class="request-banner" id="requestsBtn"><span>Friend requests</span><b>${state.requests.length}</b></button></div>`:''}<div class="conversation-list" id="conversationList"></div><div class="sidebar-foot"><button class="profile-mini" id="profileBtn">${avatarHtml(state.profile,false,state.online)}<span><b>${esc(state.profile?.name||state.profile?.real_name||'Profile')}</b><small>${state.profile?.username?`@${esc(state.profile.username)}`:'Account'}</small></span></button><button class="icon-btn small" id="settingsBtn" title="Settings">⚙</button></div></aside><main class="main" id="mainPane"><div class="empty"><div class="empty-card"><div class="empty-icon">✉</div><h2 style="color:var(--text);margin-bottom:8px">Your messages</h2><p>Choose a conversation or start a new one.</p><button class="primary" id="emptyNew" style="width:auto">＋ New message</button></div></div></main></div></div>`;$('#conversationList').addEventListener('click',e=>{const el=e.target.closest('[data-conv]');if(el)openConversation(el.dataset.conv)});$('#searchPeople').oninput=e=>{state.search=e.target.value.toLowerCase();renderConversationList()};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{state.filter=b.dataset.filter;document.querySelectorAll('.filter-tab').forEach(x=>x.classList.toggle('active',x===b));renderConversationList()});$('#newChat').onclick=newChatModal;$('#emptyNew').onclick=newChatModal;$('#peopleBtn').onclick=peopleModal;$('#profileBtn').onclick=profileModal;$('#settingsBtn').onclick=settingsModal;$('#notificationsBtn').onclick=notificationsModal;$('#requestsBtn')?.addEventListener('click',requestsModal);renderConversationList();$('#messagesPageBtn').onclick=()=>switchPage('messages');$('#callsPageBtn').onclick=()=>switchPage('calls');if(state.page==='calls')renderCallsPage();else if(!state.active)renderMessagesHome()}
+function renderApp(){root.innerHTML=`<div class="app"><div class="shell" id="shell"><aside class="sidebar"><div class="side-head"><div><div class="side-title">Tevlo</div><div class="tagline" style="margin:0">Just talk.</div></div><div class="head-icon-group"><button class="icon-btn" id="notificationsBtn" title="Notifications" aria-label="Notifications">◌</button><button class="icon-btn" id="peopleBtn" title="Find people" aria-label="Find people">♙</button><button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">⚙</button></div></div><nav class="app-nav" aria-label="Main navigation"><button class="app-nav-item active" id="messagesPageBtn"><span class="nav-icon">▤</span><span>Messages</span><span class="nav-count">${state.conversations.length}</span></button><button class="app-nav-item" id="callsPageBtn"><span class="nav-icon">☎</span><span>Calls</span><span class="nav-label">Voice & video</span></button></nav><div class="search-wrap"><input id="searchPeople" placeholder="Search conversations or people"></div><div class="filter-tabs"><button data-filter="all" class="filter-tab active">All</button><button data-filter="unread" class="filter-tab">Unread</button><button data-filter="groups" class="filter-tab">Groups</button><button data-filter="favorites" class="filter-tab">Favorites</button></div>${state.requests.length?`<div class="requests"><button class="request-banner" id="requestsBtn"><span>Friend requests</span><b>${state.requests.length}</b></button></div>`:''}<div class="conversation-list" id="conversationList"></div><div class="sidebar-foot"><button class="profile-mini" id="profileBtn">${avatarHtml(state.profile,false,state.online)}<span><b>${esc(state.profile?.name||state.profile?.real_name||'Profile')}</b><small>${state.profile?.username?`@${esc(state.profile.username)}`:'Account'}</small></span></button><button class="icon-btn small" id="settingsBtn" title="Settings">⚙</button></div></aside><main class="main" id="mainPane"><div class="empty"><div class="empty-card"><div class="empty-icon">✉</div><h2 style="color:var(--text);margin-bottom:8px">Your messages</h2><p>Choose a conversation or start a new one.</p><button class="primary" id="emptyNew" style="width:auto">＋ New message</button></div></div></main></div></div>`;$('#conversationList').addEventListener('click',e=>{const el=e.target.closest('[data-conv]');if(el)openConversation(el.dataset.conv)});$('#searchPeople').oninput=e=>{state.search=e.target.value.toLowerCase();renderConversationList()};document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{state.filter=b.dataset.filter;document.querySelectorAll('.filter-tab').forEach(x=>x.classList.toggle('active',x===b));renderConversationList()});$('#newChat').onclick=newChatModal;$('#emptyNew').onclick=newChatModal;$('#peopleBtn').onclick=peopleModal;$('#profileBtn').onclick=profileModal;$('#settingsBtn').onclick=settingsModal;$('#notificationsBtn').onclick=notificationsModal;$('#requestsBtn')?.addEventListener('click',requestsModal);renderConversationList();$('#messagesPageBtn').onclick=()=>switchPage('messages');$('#callsPageBtn').onclick=()=>switchPage('calls');if(state.page==='calls')renderCallsPage();else if(!state.active)renderMessagesHome()}
 function switchPage(page){state.page=page;$('#messagesPageBtn')?.classList.toggle('active',page==='messages');$('#callsPageBtn')?.classList.toggle('active',page==='calls');if(page==='calls')renderCallsPage();else if(state.active){const c=state.conversations.find(x=>x.id===state.active);if(c)renderChat(c);else renderMessagesHome()}else renderMessagesHome()}
 function renderMessagesHome(){const pane=$('#mainPane');if(!pane)return;pane.innerHTML='';const view=document.createElement('div');view.className='page-view';view.innerHTML='<div class="page-heading"><div><div class="eyebrow">YOUR INBOX</div><h1>Messages</h1><p>Pick up a conversation or start a new one.</p></div><button class="primary page-primary" id="pageNewMessage">＋ New message</button></div><div class="messages-welcome"><div class="welcome-icon">✉</div><h2>Your conversations, all in one place.</h2><p>Choose a chat from the list, or find someone new to message.</p><button class="secondary" id="welcomeNewMessage">Start a conversation</button></div>';pane.appendChild(view);$('#pageNewMessage').onclick=newChatModal;$('#welcomeNewMessage').onclick=newChatModal}
 function renderCallsPage(){const pane=$('#mainPane');if(!pane)return;pane.innerHTML='';const view=document.createElement('div');view.className='page-view calls-page';view.innerHTML='<div class="page-heading"><div><div class="eyebrow">STAY CONNECTED</div><h1>Calls</h1><p>Voice and video, in their own place.</p></div><div class="calls-head-icon">☎</div></div><section class="calls-feature"><div class="calls-feature-icon">↗</div><div class="calls-feature-copy"><h2>Make it a call.</h2><p>Choose someone below to start a voice or video call.</p></div></section><div class="section-heading"><h2>People you can call</h2><span id="callPeopleCount"></span></div><div class="call-contact-list" id="callContactList"></div><div class="calls-note"><span>i</span><p>Calls need a signed-in Tevlo account and microphone/camera permission to connect. Demo mode lets you explore this page, but it cannot place real calls.</p></div>';pane.appendChild(view);const rows=(state.conversations||[]).filter(c=>!c.is_group&&!c.is_self);$('#callPeopleCount').textContent=rows.length+' '+(rows.length===1?'person':'people');const list=$('#callContactList');if(!rows.length){list.innerHTML='<div class="calls-empty"><div class="calls-empty-icon">☎</div><h2>No people to call yet</h2><p>When you start conversations, they will appear here so you can call them from this page.</p><button class="primary page-primary" id="callsFindPeople">Find people</button></div>';$('#callsFindPeople').onclick=peopleModal;return}rows.forEach(c=>{const row=document.createElement('div');row.className='call-contact';row.innerHTML=(c.profile?avatarHtml(c.profile,false):avatarHtml({name:c.name},false))+'<div class="call-contact-info"><b>'+esc(c.name)+'</b><span>One-to-one conversation</span></div><div class="call-contact-actions"><button class="call-page-button voice" data-mode="audio">☎ Call</button><button class="call-page-button video" data-mode="video">▣ Video</button></div>';row.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{if(!SUPABASE_READY||!state.user||state.demo)return toast('Sign in with a real Tevlo account to place a call.');state.active=c.id;startCall(b.dataset.mode)});list.appendChild(row)})}
@@ -525,6 +525,63 @@ body[data-tevl-theme="light"] .mine .bubble{background:var(--bubble-custom,#159f
 body[data-tevl-theme="light"] input,body[data-tevl-theme="light"] textarea{background:#fff!important;color:#172820!important}
 body[data-tevl-theme="light"] .upgrade-tools{background:#f8fbf9!important}
 body[data-tevl-theme="light"] .upgrade-tools button{background:#e5f4eb!important;color:#087f50!important}
+
+/* Tevlo customization center */
+:root{--tv-page-bg:#061b12;--tv-sidebar-bg:#0d2d20;--tv-panel-bg:#0d2d20;--tv-chat-bg:#08251a;--tv-text:#ecfff5;--tv-muted:#a9d8bd;--tv-line:#245641;--tv-accent:#25c978;--tv-incoming:#174d37;--tv-outgoing:#159f63;--tv-radius:16px;--tv-bubble-radius:19px;--tv-font-size:14px;--tv-sidebar-width:340px;--tv-message-width:560px;--tv-space:10px;--tv-font:system-ui;--tv-shadow:0 10px 28px rgba(0,0,0,.15)}
+body,button,input,textarea{font-family:var(--tv-font)!important}
+body{font-size:var(--tv-font-size)!important;color:var(--tv-text)}
+.sidebar{width:var(--tv-sidebar-width)!important;min-width:min(var(--tv-sidebar-width),100%)!important;background:var(--tv-sidebar-bg)!important;color:var(--tv-text)!important}
+.main,.chat-head,.composer,.modal,.chat-menu,.message-menu,.reaction-picker,.emoji-panel,.sticker-panel{background:var(--tv-panel-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}
+.main,.messages{background:var(--tv-chat-bg)!important}
+.messages{gap:var(--tv-space)!important}
+.chat-head,.composer{border-color:var(--tv-line)!important}
+.bubble{font-size:var(--tv-font-size)!important;border-radius:var(--tv-bubble-radius)!important}
+.message-stack{max-width:min(82%,var(--tv-message-width))!important}
+.theirs .bubble{background:var(--tv-incoming)!important;color:var(--tv-text)!important}
+.mine .bubble{background:var(--tv-outgoing)!important;color:#fff!important}
+.side-title,.chat-title,.conv-name,.modal h2{color:var(--tv-text)!important}
+.stat,.meta,.chat-sub,.conv-preview,.conv-time,.tagline{color:var(--tv-muted)!important}
+.icon-btn,.tool-round{border-radius:var(--tv-radius)!important}
+.primary,.send{background:var(--tv-accent)!important;border-color:var(--tv-accent)!important}
+.conv.active,.filter-tab.active,.choice-row.selected{background:color-mix(in srgb,var(--tv-accent) 20%,transparent)!important}
+input,textarea,.search-wrap input,.composer textarea{border-color:var(--tv-line)!important}
+.modal{box-shadow:var(--tv-shadow)!important;border-radius:calc(var(--tv-radius) + 6px)!important}
+body[data-tv-density="compact"] .conv{padding:6px 8px!important}
+body[data-tv-density="compact"] .messages{padding-top:12px!important;padding-bottom:12px!important}
+body[data-tv-density="comfortable"] .conv{padding:15px 10px!important}
+body[data-tv-density="comfortable"] .messages{padding-top:28px!important;padding-bottom:28px!important}
+body[data-tv-motion="reduced"] *,body[data-tv-motion="reduced"] *:before,body[data-tv-motion="reduced"] *:after{animation:none!important;transition:none!important;scroll-behavior:auto!important}
+body[data-tv-shape="sharp"] .bubble,body[data-tv-shape="sharp"] .modal,body[data-tv-shape="sharp"] .conv,body[data-tv-shape="sharp"] button{border-radius:4px!important}
+body[data-tv-shape="pill"] .bubble,body[data-tv-shape="pill"] .icon-btn,body[data-tv-shape="pill"] .tool-round,body[data-tv-shape="pill"] .filter-tab{border-radius:999px!important}
+body[data-tv-contrast="high"]{filter:contrast(1.12)}
+body[data-tv-contrast="high"] .stat,body[data-tv-contrast="high"] .meta,body[data-tv-contrast="high"] .chat-sub{color:var(--tv-text)!important}
+body[data-tv-wallpaper="ocean"] .messages{background:linear-gradient(135deg,#062536,#0a3a45,#09251f)!important}
+body[data-tv-wallpaper="sunset"] .messages{background:linear-gradient(135deg,#38243d,#5b3437,#30283a)!important}
+body[data-tv-wallpaper="stars"] .messages{background-image:radial-gradient(circle at 20% 20%,#a8f0cb 1px,transparent 2px),radial-gradient(circle at 75% 65%,#a8f0cb 1px,transparent 2px),linear-gradient(135deg,#071b14,#102a24)!important}
+body[data-tv-wallpaper="blossom"] .messages{background:radial-gradient(ellipse at 10% 10%,#f6c9de55,transparent 30%),linear-gradient(135deg,#251b2b,#352033)!important}
+body[data-tv-wallpaper="sand"] .messages{background:linear-gradient(135deg,#393020,#5b4a32,#302a20)!important}
+body[data-tv-wallpaper="lavender"] .messages{background:linear-gradient(135deg,#28203e,#403054,#24233a)!important}
+body[data-tv-wallpaper="plain"] .messages{background:var(--tv-chat-bg)!important}
+body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#071f16,#0b2b1e,#08251a)!important}
+#settingsBtn{font-size:19px}
+.custom-settings-modal{width:min(980px,100%);height:min(86vh,820px);display:flex;flex-direction:column;gap:12px}
+.custom-settings-toolbar{display:flex;gap:10px;align-items:center}
+.custom-settings-search{flex:1;min-width:0}
+.custom-settings-layout{display:grid;grid-template-columns:190px minmax(0,1fr);gap:14px;min-height:0;flex:1}
+.custom-settings-categories{overflow:auto;display:flex;flex-direction:column;gap:5px;border-right:1px solid var(--tv-line);padding-right:8px}
+.custom-settings-category{padding:10px 12px;text-align:left;border-radius:11px;background:transparent;color:var(--tv-muted);font-weight:700}
+.custom-settings-category.active{background:color-mix(in srgb,var(--tv-accent) 20%,transparent);color:var(--tv-text)}
+.custom-settings-list{overflow:auto;padding:2px 8px 12px 0}
+.custom-setting-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(140px,230px);gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--tv-line)}
+.custom-setting-title{font-size:13px;font-weight:750}
+.custom-setting-desc{font-size:11px;color:var(--tv-muted);margin-top:3px;line-height:1.4}
+.custom-setting-control{width:100%;max-width:230px}
+.custom-setting-control[type=color]{height:38px;padding:4px}
+.custom-settings-footer{display:flex;gap:8px;justify-content:space-between;align-items:center;border-top:1px solid var(--tv-line);padding-top:10px}
+.custom-settings-count{font-size:12px;color:var(--tv-muted)}
+.custom-settings-footer .primary{width:auto;margin:0}
+@media(max-width:640px){.custom-settings-modal{height:90dvh;padding:14px}.custom-settings-layout{grid-template-columns:110px minmax(0,1fr);gap:8px}.custom-settings-category{font-size:11px;padding:9px 7px}.custom-setting-row{grid-template-columns:1fr;gap:6px}.custom-setting-control{max-width:none}.custom-settings-toolbar{flex-wrap:wrap}.custom-settings-search{flex-basis:100%}}
+
 </style>
 <script id="tevlo-upgrade-patch">
 (()=>{
@@ -584,16 +641,421 @@ body[data-tevl-theme="light"] .upgrade-tools button{background:#e5f4eb!important
       $('#tevloGroupDetails')?.addEventListener('click',()=>groupDetailsModal(c));
     }
   };
-  settingsModal=function(){
-    showModal('<div class="modal-head"><h2>Tevlo settings</h2><button class="ghost" data-close>✕</button></div><p class="upgrade-note">Your preferences sync to your Tevlo account when connected.</p><div class="upgrade-field"><label>Interface theme</label><select id="prefTheme"><option value="dark-green">Forest dark</option><option value="light">Light</option><option value="dark">Dark</option></select></div><div class="upgrade-field"><label>Chat wallpaper</label><select id="prefWallpaper"><option value="forest">Forest glow</option><option value="plain">Plain</option><option value="ocean">Ocean</option><option value="sunset">Sunset</option><option value="stars">Star field</option></select></div><div class="upgrade-field"><label>Accent color</label><input id="prefAccent" type="color" value="#25c978"></div><div class="upgrade-field"><label>Message bubble color</label><input id="prefBubble" type="color" value="#159f63"></div><div class="upgrade-field"><label>Notification sound</label><select id="prefSound"><option value="soft">Soft chime</option><option value="pop">Pop</option><option value="off">Off</option></select></div><div class="upgrade-field"><label>Who can call you?</label><select id="prefCalls"><option value="true">Friends and people I chat with</option><option value="false">Nobody</option></select></div><div class="upgrade-field"><label>Who can message you?</label><select id="prefMessages"><option value="friends">Friends</option><option value="everyone">Everyone on Tevlo</option></select></div><div class="upgrade-field"><label>Last seen visibility</label><select id="prefSeen"><option value="friends">Friends</option><option value="nobody">Nobody</option><option value="everyone">Everyone</option></select></div><div class="upgrade-field"><label>Profile status</label><input id="prefStatus" maxlength="80" placeholder="What are you up to?"></div><div class="upgrade-field"><label>Status visibility</label><select id="prefStatusVisibility"><option value="friends">Friends</option><option value="everyone">Everyone</option><option value="nobody">Nobody</option></select></div><div class="upgrade-field"><label>Quiet hours start</label><input id="prefQuietStart" type="time"></div><div class="upgrade-field"><label>Quiet hours end</label><input id="prefQuietEnd" type="time"></div><div class="settings-row"><b>Enable quiet hours</b><button class="switch" id="prefQuietEnabled" aria-label="Enable quiet hours"></button></div><div class="settings-row"><b>Browser notifications</b><button class="switch" id="prefNotifications" aria-label="Browser notifications"></button></div><div class="settings-row"><b>Read receipts</b><button class="switch" id="prefReadReceipts" aria-label="Read receipts"></button></div><button class="primary" id="saveUpgradePrefs">Save preferences</button><button class="secondary" id="openProfileUpgrade">Edit profile</button><button class="ghost" id="settingsSignout">Sign out</button>');
-    const set=(id,v)=>{const el=$('#'+id);if(el)el.value=String(v)};
-    set('prefTheme',upgradePrefs.theme);set('prefWallpaper',upgradePrefs.wallpaper);set('prefAccent',upgradePrefs.accent);set('prefBubble',upgradePrefs.bubble);set('prefSound',upgradePrefs.sound);set('prefCalls',upgradePrefs.allowCalls);set('prefMessages',upgradePrefs.allowMessages);set('prefSeen',upgradePrefs.lastSeen);set('prefStatus',upgradePrefs.statusText);set('prefStatusVisibility',upgradePrefs.statusVisibility);set('prefQuietStart',upgradePrefs.quietStart);set('prefQuietEnd',upgradePrefs.quietEnd);
-    for(const [id,key] of [['prefQuietEnabled','quietEnabled'],['prefNotifications','notifications'],['prefReadReceipts','readReceipts']]){$('#'+id)?.classList.toggle('on',!!upgradePrefs[key]);$('#'+id).onclick=()=>$('#'+id).classList.toggle('on')}
-    $('#saveUpgradePrefs').onclick=async()=>{await saveUpgradePrefs({theme:$('#prefTheme').value,wallpaper:$('#prefWallpaper').value,accent:$('#prefAccent').value,bubble:$('#prefBubble').value,sound:$('#prefSound').value,allowCalls:$('#prefCalls').value==='true',allowMessages:$('#prefMessages').value,lastSeen:$('#prefSeen').value,statusText:$('#prefStatus').value.trim(),statusVisibility:$('#prefStatusVisibility').value,quietStart:$('#prefQuietStart').value||'22:00',quietEnd:$('#prefQuietEnd').value||'07:00',quietEnabled:$('#prefQuietEnabled').classList.contains('on'),notifications:$('#prefNotifications').classList.contains('on'),readReceipts:$('#prefReadReceipts').classList.contains('on')});state.notifications=upgradePrefs.notifications;state.readReceipts=upgradePrefs.readReceipts;closeModal();toast('Preferences saved.');renderApp()};
-    $('#openProfileUpgrade').onclick=()=>{closeModal();profileModal()};
-    $('#settingsSignout').onclick=async()=>{if(SUPABASE_READY)await sb.auth.signOut();location.reload()};
+  const customSettingGroups=[
+    {name:'Appearance',icon:'✦',items:[
+      ['theme','Interface theme','select','dark-green',['Forest dark','Light','Dark'],'Overall interface theme.'],
+      ['wallpaper','Chat wallpaper','select','forest',['Forest glow','Ocean','Sunset','Star field','Blossom','Sand','Lavender','Plain'],'Choose the background behind your messages.'],
+      ['accent','Accent color','color','#25c978',null,'Buttons and active navigation.'],
+      ['bubble','Outgoing bubble color','color','#159f63',null,'The color of your messages.'],
+      ['incoming','Incoming bubble color','color','#174d37',null,'The color of messages you receive.'],
+      ['pageBg','Page background','color','#061b12',null,'Background around the app.'],
+      ['sidebarBg','Sidebar background','color','#0d2d20',null,'Conversation list background.'],
+      ['panelBg','Panel background','color','#0d2d20',null,'Headers, menus, and settings panels.'],
+      ['chatBg','Chat background','color','#08251a',null,'Base chat background color.'],
+      ['textColor','Main text color','color','#ecfff5',null,'Main text across Tevlo.'],
+      ['mutedColor','Secondary text color','color','#a9d8bd',null,'Subtitles and timestamps.'],
+      ['lineColor','Border color','color','#245641',null,'Dividers and outlines.'],
+      ['cornerRadius','Corner roundness','range',16,[0,30,1],'Roundness of cards and controls.'],
+      ['bubbleRadius','Bubble roundness','range',19,[0,36,1],'Roundness of message bubbles.'],
+      ['shadow','Card shadows','select','soft',['None','Soft','Strong'],'Shadow strength on panels.'],
+      ['density','Interface spacing','select','normal',['Compact','Normal','Comfortable'],'How tightly items are spaced.'],
+      ['shape','Control shape','select','rounded',['Rounded','Sharp','Pill'],'Shape of bubbles and buttons.'],
+      ['sidebarWidth','Sidebar width','range',340,[280,460,10],'Width of the conversation list.'],
+      ['messageWidth','Message maximum width','range',560,[280,900,20],'Maximum width of a message bubble.'],
+      ['showTagline','Show Just talk tagline','toggle',true,null,'Show or hide the small subtitle under Tevlo.']
+    ]},
+    {name:'Colors',icon:'◉',items:[
+      ['headerColor','Header accent','color','#087f50',null,'Accent used by the top navigation.'],
+      ['navColor','Navigation accent','color','#087f50',null,'Navigation icons and selected labels.'],
+      ['selectedColor','Selected conversation','color','#15523a',null,'Background for the selected conversation.'],
+      ['searchBg','Search field background','color','#0a2419',null,'Search box fill.'],
+      ['composerBg','Message composer background','color','#0a2419',null,'Where you type a message.'],
+      ['buttonText','Button text color','color','#f2fff8',null,'Text on primary buttons.'],
+      ['linkColor','Link color','color','#55e69a',null,'Links and highlighted actions.'],
+      ['onlineColor','Online indicator','color','#25c978',null,'Online status dot.'],
+      ['unreadColor','Unread indicator','color','#25c978',null,'Unread dots and badges.'],
+      ['dangerColor','Warning color','color','#ff7181',null,'Error and warning feedback.'],
+      ['successColor','Success color','color','#55e69a',null,'Successful actions and confirmation.'],
+      ['reactionBg','Reaction chip background','color','#123f2c',null,'Message reaction chips.'],
+      ['reactionText','Reaction chip text','color','#c9f6dc',null,'Text on reaction chips.'],
+      ['tooltipBg','Tooltip background','color','#172525',null,'Small toast and tooltip backgrounds.'],
+      ['tooltipText','Tooltip text','color','#ffffff',null,'Text in toast messages.'],
+      ['avatarBg','Default avatar background','color','#123f2c',null,'Background for initials avatars.'],
+      ['avatarText','Default avatar text','color','#55e69a',null,'Initials in default avatars.'],
+      ['filterBg','Filter chip background','color','#123f2c',null,'All, unread, and group filters.'],
+      ['filterText','Filter chip text','color','#a9d8bd',null,'Text in filter chips.'],
+      ['focusColor','Keyboard focus ring','color','#55e69a',null,'Focus ring for keyboard navigation.']
+    ]},
+    {name:'Messages',icon:'☷',items:[
+      ['fontSize','Message text size','range',14,[11,22,1],'Text size inside chats.'],
+      ['lineHeight','Message line spacing','range',1.35,[1,2,0.05],'Space between lines in messages.'],
+      ['messageGap','Space between messages','range',10,[2,24,1],'Vertical spacing between message rows.'],
+      ['bubblePadding','Bubble padding','range',12,[6,24,1],'Space inside message bubbles.'],
+      ['messageWidth','Message maximum width','range',560,[280,900,20],'Limit the width of long messages.'],
+      ['showTimestamps','Show message timestamps','toggle',true,null,'Display message times.'],
+      ['showReadReceipts','Show read receipts','toggle',true,null,'Display read receipt indicators where supported.'],
+      ['groupMessages','Group consecutive messages','toggle',true,null,'Visually group messages from the same person.'],
+      ['linkPreview','Show link previews','toggle',true,null,'Allow previews where the app supports them.'],
+      ['enterToSend','Enter sends message','toggle',true,null,'Use Enter to send, rather than only adding a line.'],
+      ['showEmojiButton','Show emoji button','toggle',true,null,'Keep the emoji shortcut visible.'],
+      ['showAttachmentButton','Show attachment button','toggle',true,null,'Keep the attachment shortcut visible.'],
+      ['showVoiceButton','Show voice message button','toggle',true,null,'Keep voice-message controls visible.'],
+      ['showMessageActions','Show message action buttons','toggle',true,null,'Show reply and other message actions.'],
+      ['showAvatars','Show avatars in chat','toggle',true,null,'Show profile images beside chat content.'],
+      ['showSenderNames','Show sender names in groups','toggle',true,null,'Show names above group messages.'],
+      ['messageAnimation','New message animation','select','subtle',['Off','Subtle','Playful'],'Animation used for newly added messages.'],
+      ['bubbleStyle','Bubble style','select','classic',['Classic','Flat','Outlined','Soft shadow'],'Choose the appearance of bubbles.'],
+      ['linkStyle','Link appearance','select','underline',['Underline','Accent','Bold'],'Change how links are emphasized.'],
+      ['longMessageWrap','Long message wrapping','select','natural',['Natural','Tighter','Roomy'],'Adjust the readability of long messages.']
+    ]},
+    {name:'Layout',icon:'▦',items:[
+      ['density','Interface spacing','select','normal',['Compact','Normal','Comfortable'],'Change list and message spacing.'],
+      ['sidebarWidth','Sidebar width','range',340,[280,460,10],'Adjust the left panel width.'],
+      ['messageWidth','Message maximum width','range',560,[280,900,20],'Adjust chat bubble maximum width.'],
+      ['headerHeight','Header height','range',76,[54,100,2],'Height of chat headers.'],
+      ['avatarSize','Avatar size','range',44,[28,72,2],'Size of profile circles in lists.'],
+      ['conversationRowHeight','Conversation row spacing','range',12,[4,22,1],'Space around each conversation.'],
+      ['composerHeight','Composer minimum height','range',42,[36,70,2],'Height of the send and tool buttons.'],
+      ['contentPadding','Content side padding','range',22,[8,60,2],'Padding around chat messages.'],
+      ['modalWidth','Settings panel width','select','wide',['Narrow','Standard','Wide'],'Preferred width of dialogs.'],
+      ['roundedCards','Rounded cards','toggle',true,null,'Use rounded corners on cards.'],
+      ['compactToolbar','Compact top toolbar','toggle',false,null,'Use a tighter top icon row.'],
+      ['showNavLabels','Show navigation labels','toggle',true,null,'Show text labels in navigation.'],
+      ['showConversationPreview','Show conversation preview','toggle',true,null,'Show the latest-message preview.'],
+      ['showConversationTime','Show conversation time','toggle',true,null,'Show the time of the latest message.'],
+      ['showUnreadCounts','Show unread counts','toggle',true,null,'Show unread badges when available.'],
+      ['sidebarDividers','Show sidebar dividers','toggle',true,null,'Show subtle dividers between sections.'],
+      ['centerEmptyState','Center empty-chat message','toggle',true,null,'Center the welcome state when no chat is open.'],
+      ['fullHeightChat','Use full-height chat','toggle',true,null,'Let the app fill the available window height.'],
+      ['stickyComposer','Keep composer at bottom','toggle',true,null,'Keep the message input at the bottom.'],
+      ['mobileLargeButtons','Larger mobile buttons','toggle',false,null,'Increase touch target sizes on phones.']
+    ]},
+    {name:'Typography',icon:'Aa',items:[
+      ['fontFamily','Font family','select','system',['System','Arial','Georgia','Verdana','Trebuchet','Monospace'],'Choose the app font.'],
+      ['fontSize','Base text size','range',14,[11,20,1],'Set the base text size.'],
+      ['messageFontSize','Message text size','range',14,[11,22,1],'Set the size of message text.'],
+      ['headingSize','Heading size','range',24,[18,34,1],'Size of headings and titles.'],
+      ['smallTextSize','Small text size','range',12,[10,16,1],'Size of captions and metadata.'],
+      ['lineHeight','Line spacing','range',1.35,[1,2,0.05],'Space between text lines.'],
+      ['fontWeight','Font weight','select','normal',['Light','Normal','Medium','Bold'],'Choose the main text weight.'],
+      ['headingWeight','Heading weight','select','bold',['Normal','Medium','Bold','Extra bold'],'Choose the heading weight.'],
+      ['letterSpacing','Letter spacing','range',0,[-1,2,0.1],'Adjust letter spacing.'],
+      ['uppercaseLabels','Uppercase section labels','toggle',false,null,'Use uppercase section labels.'],
+      ['underlineLinks','Underline links','toggle',true,null,'Make links easier to identify.'],
+      ['italicMetadata','Italicize metadata','toggle',false,null,'Use italics for subtle supporting text.'],
+      ['emojiScale','Emoji size','range',1,[0.8,1.8,0.1],'Scale emoji size in chat.'],
+      ['buttonTextSize','Button text size','range',13,[11,18,1],'Set the size of button labels.'],
+      ['inputTextSize','Input text size','range',14,[11,20,1],'Set the size of text you type.'],
+      ['profileNameSize','Profile name size','range',18,[14,26,1],'Size of names in profile views.'],
+      ['conversationNameSize','Conversation name size','range',14,[12,20,1],'Size of names in conversation list.'],
+      ['timestampSize','Timestamp size','range',10,[9,14,1],'Size of message timestamps.'],
+      ['textContrast','Text contrast','select','normal',['Normal','High'],'Increase text contrast.'],
+      ['fontSmoothing','Font smoothing','toggle',true,null,'Use smoother font rendering where supported.']
+    ]},
+    {name:'Wallpapers',icon:'▧',items:[
+      ['wallpaper','Chat wallpaper','select','forest',['Forest glow','Ocean','Sunset','Star field','Blossom','Sand','Lavender','Plain'],'Choose a built-in chat background.'],
+      ['wallpaperOpacity','Wallpaper intensity','range',100,[0,100,5],'Adjust the visual intensity of the wallpaper.'],
+      ['wallpaperPattern','Wallpaper pattern','select','gradient',['None','Gradient','Dots','Stars','Waves'],'Choose the background pattern.'],
+      ['wallpaperMotion','Animated wallpaper','toggle',false,null,'Enable subtle wallpaper motion where supported.'],
+      ['wallpaperBlur','Wallpaper softness','range',0,[0,10,1],'Soften wallpaper details.'],
+      ['wallpaperColor1','Wallpaper gradient color 1','color','#071f16',null,'First custom gradient color.'],
+      ['wallpaperColor2','Wallpaper gradient color 2','color','#0b2b1e',null,'Second custom gradient color.'],
+      ['wallpaperColor3','Wallpaper gradient color 3','color','#08251a',null,'Third custom gradient color.'],
+      ['wallpaperBlend','Wallpaper blend','select','normal',['Normal','Soft light','Multiply'],'Choose how the wallpaper blends.'],
+      ['wallpaperFit','Wallpaper sizing','select','cover',['Cover','Contain','Stretch'],'Choose how the background fills the chat.'],
+      ['wallpaperPosition','Wallpaper position','select','center',['Center','Top','Bottom','Left','Right'],'Set background alignment.'],
+      ['wallpaperContrast','Wallpaper contrast','range',100,[50,150,5],'Adjust wallpaper contrast.'],
+      ['wallpaperSaturation','Wallpaper saturation','range',100,[0,200,10],'Adjust wallpaper saturation.'],
+      ['wallpaperBrightness','Wallpaper brightness','range',100,[50,150,5],'Adjust wallpaper brightness.'],
+      ['wallpaperNoise','Texture effect','toggle',false,null,'Add a subtle texture effect where supported.'],
+      ['wallpaperGrid','Show subtle grid','toggle',false,null,'Add a light grid behind messages.'],
+      ['wallpaperBorder','Frame the chat background','toggle',false,null,'Add a subtle frame around the message area.'],
+      ['wallpaperTint','Wallpaper tint','color','#0b2b1e',null,'Tint color used by the chat background.'],
+      ['wallpaperTintStrength','Tint strength','range',20,[0,80,5],'Adjust the tint intensity.'],
+      ['wallpaperCustomEnabled','Use custom gradient colors','toggle',false,null,'Use the custom gradient colors above.']
+    ]},
+    {name:'Notifications',icon:'◌',items:[
+      ['notifications','Browser notifications','toggle',true,null,'Enable in-app/browser notifications where permitted.'],
+      ['sound','Notification sound','select','soft',['Off','Soft chime','Pop','Bell','Digital'],'Choose a notification sound.'],
+      ['quietEnabled','Enable quiet hours','toggle',false,null,'Silence app notifications during quiet hours.'],
+      ['quietStart','Quiet hours start','time','22:00',null,'When quiet hours begin.'],
+      ['quietEnd','Quiet hours end','time','07:00',null,'When quiet hours end.'],
+      ['notifyMessages','Notify for new messages','toggle',true,null,'Notifications for incoming messages.'],
+      ['notifyCalls','Notify for incoming calls','toggle',true,null,'Alerts for incoming calls.'],
+      ['notifyFriendRequests','Notify for friend requests','toggle',true,null,'Alerts for friend requests.'],
+      ['notifyGroupEvents','Notify for group events','toggle',true,null,'Alerts for group events.'],
+      ['notifyReactions','Notify for reactions','toggle',false,null,'Alerts when someone reacts to your messages.'],
+      ['notifyMentions','Notify for mentions','toggle',true,null,'Alerts for group mentions where supported.'],
+      ['notifyPreviews','Show message preview in notification','toggle',true,null,'Show message text in notifications where supported.'],
+      ['notifyVibration','Vibration on supported devices','toggle',false,null,'Use vibration where the browser/device supports it.'],
+      ['notifyBadge','Show unread app badge','toggle',true,null,'Show unread count badges where available.'],
+      ['notifyDesktop','Allow desktop notifications','toggle',true,null,'Request browser permission when you turn it on.'],
+      ['notifySoundVolume','Notification sound volume','range',35,[0,100,5],'Set notification sound volume.'],
+      ['notifyRepeat','Repeat missed notification','toggle',false,null,'Repeat alerts where supported.'],
+      ['notifyGroupDigest','Group notification summary','select','instant',['Instant','Hourly summary','Off'],'Choose group alert frequency.'],
+      ['notifyChatDigest','Conversation notification style','select','preview',['Preview','Name only','Quiet'],'Choose the in-app alert style.'],
+      ['notifyDuringCall','Mute other alerts during calls','toggle',true,null,'Reduce interruptions while calling.']
+    ]},
+    {name:'Accessibility',icon:'◎',items:[
+      ['reduceMotion','Reduce motion','toggle',false,null,'Reduce transitions and movement.'],
+      ['textContrast','High contrast','select','normal',['Normal','High'],'Increase contrast for readability.'],
+      ['largeText','Larger interface text','toggle',false,null,'Increase interface text size.'],
+      ['focusOutlines','Strong keyboard focus','toggle',true,null,'Make keyboard focus easier to see.'],
+      ['screenReaderLabels','Extra screen-reader labels','toggle',true,null,'Use clearer labels for controls.'],
+      ['keyboardShortcuts','Keyboard shortcuts','toggle',true,null,'Enable supported keyboard shortcuts.'],
+      ['alwaysShowActions','Always show message actions','toggle',false,null,'Keep message actions visible without hover.'],
+      ['disableAutoplay','Disable media autoplay','toggle',true,null,'Avoid automatically playing media.'],
+      ['limitFlashing','Limit flashing effects','toggle',true,null,'Avoid flashing effects where possible.'],
+      ['underlineLinks','Underline links','toggle',true,null,'Use underlines to distinguish links.'],
+      ['clearFocus','High visibility focus ring','color','#55e69a',null,'Choose the keyboard focus color.'],
+      ['touchTargets','Touch target size','select','normal',['Compact','Normal','Large'],'Set the size of interactive targets.'],
+      ['readingWidth','Reading line width','select','normal',['Narrow','Normal','Wide'],'Set readable line lengths.'],
+      ['plainAnimations','Simple animations','toggle',true,null,'Prefer simple transitions.'],
+      ['showButtonText','Show button labels','toggle',true,null,'Prefer labels over icon-only buttons where possible.'],
+      ['colorBlindMode','Color assistance','select','off',['Off','Deuteranopia support','Protanopia support','Tritanopia support'],'Apply a mild color-assistance filter.'],
+      ['captionStyle','Caption style','select','standard',['Standard','Large','High contrast'],'Caption appearance where captions exist.'],
+      ['timeFormat','Time format','select','locale',['Device default','12-hour','24-hour'],'Preferred time display.'],
+      ['motionSpeed','Animation speed','select','normal',['Slow','Normal','Fast','Off'],'Set transition speed.'],
+      ['confirmDestructive','Confirm destructive actions','toggle',true,null,'Ask before destructive actions when supported.']
+    ]},
+    {name:'Privacy',icon:'⌑',items:[
+      ['allowCalls','Allow incoming calls','toggle',true,null,'Disable incoming calls in this app when switched off.'],
+      ['allowMessages','Who can message you','select','friends',['Friends','Everyone'],'Preference for who may message you; server rules still apply.'],
+      ['lastSeen','Last seen visibility','select','friends',['Friends','Nobody','Everyone'],'Choose your preferred last-seen visibility.'],
+      ['statusVisibility','Status visibility','select','friends',['Friends','Everyone','Nobody'],'Choose who can see your status.'],
+      ['readReceipts','Read receipts','toggle',true,null,'Your read receipt preference.'],
+      ['onlineStatus','Show online status','toggle',true,null,'Your online status preference.'],
+      ['profileSearchable','Discoverable by username','toggle',true,null,'Your preference for being found in search.'],
+      ['messagePreviewPrivacy','Hide message previews','toggle',false,null,'Hide message previews in app notifications.'],
+      ['callPreviewPrivacy','Hide incoming call details','toggle',false,null,'Reduce call details in notification surfaces where supported.'],
+      ['autoLock','Auto-lock settings panel','select','never',['Never','After 1 minute','After 5 minutes'],'Preference for locking sensitive settings; requires app support.'],
+      ['blockUnknownCalls','Block calls from unknown people','toggle',false,null,'Preference for limiting calls from unknown people.'],
+      ['friendRequests','Who can send friend requests','select','everyone',['Everyone','Nobody'],'Preference for friend request access.'],
+      ['groupInvites','Who can add you to groups','select','friends',['Friends','Everyone'],'Preference for group invitations.'],
+      ['activityVisibility','Activity visibility','select','friends',['Friends','Nobody','Everyone'],'Choose your activity visibility preference.'],
+      ['profilePhotoVisibility','Profile photo visibility','select','everyone',['Everyone','Friends','Nobody'],'Choose who can see your profile photo.'],
+      ['statusExpiry','Status expiry','select','day',['1 hour','1 day','1 week','Never'],'Default status expiry preference.'],
+      ['downloadMedia','Allow media downloads','toggle',true,null,'Preference for downloading shared media.'],
+      ['linkSafety','Show link safety reminder','toggle',true,null,'Keep a reminder before opening unfamiliar links.'],
+      ['reportShortcut','Show report shortcut','toggle',true,null,'Keep reporting easy to find.'],
+      ['privacyHints','Show privacy tips','toggle',true,null,'Show occasional privacy tips in settings.']
+    ]},
+    {name:'Profile',icon:'♙',items:[
+      ['statusText','Profile status text','text','',null,'A short line about what you are up to.'],
+      ['statusVisibility','Status visibility','select','friends',['Friends','Everyone','Nobody'],'Who should see your status.'],
+      ['profileCoverColor','Profile cover color','color','#0b6844',null,'First profile cover color.'],
+      ['profileCoverColor2','Profile cover second color','color','#39b77c',null,'Second profile cover color.'],
+      ['profileCoverStyle','Profile cover style','select','gradient',['Gradient','Solid','Pattern','Minimal'],'Style of your profile cover.'],
+      ['profileAccent','Profile accent color','color','#25c978',null,'Accent used in profile surfaces.'],
+      ['profileAvatarShape','Avatar shape','select','circle',['Circle','Rounded square','Square'],'Shape for profile avatars.'],
+      ['profileAvatarBorder','Avatar border','toggle',true,null,'Show a border around avatars.'],
+      ['profileAvatarBorderColor','Avatar border color','color','#25c978',null,'Avatar border color.'],
+      ['profileNameStyle','Profile name style','select','bold',['Normal','Bold','Elegant'],'Display style for your name.'],
+      ['profileShowStatus','Show profile status','toggle',true,null,'Show the status line on your profile.'],
+      ['profileShowPronouns','Show pronouns field','toggle',false,null,'Show pronouns when provided in your profile.'],
+      ['profileShowJoined','Show joined date','toggle',false,null,'Show account joined date where available.'],
+      ['profileBioSize','Profile bio size','range',14,[11,20,1],'Text size for profile descriptions.'],
+      ['profileCardStyle','Profile card style','select','soft',['Soft','Flat','Outlined'],'Choose the profile card appearance.'],
+      ['profileCoverHeight','Profile cover height','range',130,[80,220,10],'Height of the profile cover.'],
+      ['profileAvatarSize','Profile avatar size','range',92,[64,140,4],'Size of the profile avatar.'],
+      ['profileShowOnline','Show online indicator','toggle',true,null,'Show online indicators where supported.'],
+      ['profileButtonStyle','Profile button style','select','rounded',['Rounded','Sharp','Pill'],'Shape of profile actions.'],
+      ['profilePrivacyBadge','Show privacy badge','toggle',true,null,'Show privacy-related status in your profile settings.']
+    ]},
+    {name:'Groups',icon:'♧',items:[
+      ['groupShowAvatars','Show group avatars','toggle',true,null,'Show member avatars in group chats.'],
+      ['groupShowNames','Show sender names','toggle',true,null,'Show who sent each group message.'],
+      ['groupMentionStyle','Mention highlight style','select','accent',['Accent','Bold','Pill'],'Choose how mentions are highlighted.'],
+      ['groupNoticeStyle','Group notice style','select','banner',['Banner','Inline','Compact'],'Choose the appearance of group notices.'],
+      ['groupAvatarShape','Group avatar shape','select','rounded',['Circle','Rounded square','Square'],'Shape for group avatars.'],
+      ['groupAvatarColor','Group avatar background','color','#123f2c',null,'Background for group avatars.'],
+      ['groupAvatarText','Group avatar initials','color','#55e69a',null,'Text color for group initials.'],
+      ['groupEvents','Show group events','toggle',true,null,'Show group event tools where available.'],
+      ['groupPolls','Show group polls','toggle',true,null,'Show poll tools where available.'],
+      ['groupPinnedNotices','Show pinned notices','toggle',true,null,'Show pinned group notices where supported.'],
+      ['groupMemberCount','Show group member count','toggle',true,null,'Show member counts where available.'],
+      ['groupDescription','Show group description','toggle',true,null,'Show the group description.'],
+      ['groupMessageSpacing','Group message spacing','range',10,[2,24,1],'Spacing between group messages.'],
+      ['groupBubbleStyle','Group bubble style','select','classic',['Classic','Flat','Outlined'],'Group message bubble appearance.'],
+      ['groupNoticeColor','Group notice color','color','#174d37',null,'Background for group notice surfaces.'],
+      ['groupMentionColor','Mention color','color','#55e69a',null,'Color for @mentions.'],
+      ['groupAdminBadge','Show admin badge','toggle',true,null,'Show admin labels where supported.'],
+      ['groupEventReminders','Group event reminders','toggle',true,null,'Preference for event reminders.'],
+      ['groupPollResults','Show poll results','toggle',true,null,'Show poll results where supported.'],
+      ['groupHeaderCompact','Compact group header','toggle',false,null,'Use a smaller group header.']
+    ]},
+    {name:'Motion',icon:'↝',items:[
+      ['reduceMotion','Reduce motion','toggle',false,null,'Turn off motion-heavy transitions.'],
+      ['motionSpeed','Animation speed','select','normal',['Slow','Normal','Fast','Off'],'Set how fast UI animations feel.'],
+      ['hoverEffects','Hover effects','toggle',true,null,'Enable hover highlights on desktop.'],
+      ['buttonMotion','Button motion','toggle',true,null,'Enable subtle button movement.'],
+      ['messageAnimation','Message arrival animation','select','subtle',['Off','Subtle','Playful'],'Choose how new messages appear.'],
+      ['pageTransition','Page transition','select','fade',['Off','Fade','Slide'],'Choose navigation transition.'],
+      ['modalAnimation','Modal animation','select','fade',['Off','Fade','Scale'],'Choose how dialogs appear.'],
+      ['wallpaperMotion','Animated wallpaper','toggle',false,null,'Enable subtle background movement.'],
+      ['typingAnimation','Typing indicator animation','toggle',true,null,'Animate the typing indicator.'],
+      ['loadingAnimation','Loading animation','select','dots',['Dots','Spinner','Minimal','Off'],'Choose the loading indicator.'],
+      ['toastAnimation','Toast animation','select','slide',['Off','Fade','Slide'],'Choose toast entrance animation.'],
+      ['focusAnimation','Focus animation','toggle',true,null,'Animate keyboard focus changes.'],
+      ['scrollBehavior','Smooth scrolling','toggle',true,null,'Use smooth scrolling where supported.'],
+      ['emojiAnimation','Animated emoji','toggle',true,null,'Animate emoji where supported.'],
+      ['callPulse','Call status pulse','toggle',true,null,'Pulse the call status indicator.'],
+      ['onlinePulse','Online dot pulse','toggle',false,null,'Animate the online status dot.'],
+      ['skeletonMotion','Loading skeleton motion','toggle',false,null,'Animate loading placeholders where available.'],
+      ['sidebarMotion','Sidebar transition','select','subtle',['Off','Subtle','Slide'],'Choose sidebar transition style.'],
+      ['reactionMotion','Reaction animation','toggle',true,null,'Animate reactions where supported.'],
+      ['celebrationEffects','Celebration effects','toggle',false,null,'Enable optional celebratory UI effects.']
+    ]},
+    {name:'Advanced',icon:'⚙',items:[
+      ['saveOnDevice','Save preferences on this device','toggle',true,null,'Keep a local copy of your settings.'],
+      ['syncPreferences','Sync preferences to account','toggle',true,null,'Try syncing settings to your Tevlo account.'],
+      ['confirmDestructive','Confirm destructive actions','toggle',true,null,'Preference for confirmation prompts.'],
+      ['showDebugInfo','Show connection details','toggle',false,null,'Show basic connection diagnostics.'],
+      ['compactDates','Compact date labels','toggle',false,null,'Use shorter date labels where available.'],
+      ['timeFormat','Time format','select','locale',['Device default','12-hour','24-hour'],'Preferred time format.'],
+      ['dateFormat','Date format','select','locale',['Device default','Month first','Day first','Year first'],'Preferred date format.'],
+      ['defaultChatTab','Default app page','select','messages',['Messages','Calls'],'Which page to show when opening the app.'],
+      ['defaultFilter','Default conversation filter','select','all',['All','Unread','Groups','Friends'],'Preferred conversation list filter.'],
+      ['searchScope','Search scope','select','all',['All conversations','Current conversation','People'],'Preferred search scope.'],
+      ['mediaQuality','Media preview quality','select','balanced',['Data saver','Balanced','High'],'Preferred media preview quality.'],
+      ['autoDownloadMedia','Auto-download media','select','wifi',['Never','Wi-Fi only','Always'],'Preference for media downloads.'],
+      ['dataSaver','Data saver','toggle',false,null,'Prefer lower data use where supported.'],
+      ['cacheMedia','Cache media previews','toggle',true,null,'Preference for caching media previews.'],
+      ['startupPage','Startup page','select','messages',['Messages','Calls'],'Preferred page when Tevlo starts.'],
+      ['showWhatsNew','Show feature tips','toggle',true,null,'Show helpful feature hints.'],
+      ['settingsCategoryRemember','Remember settings category','toggle',true,null,'Reopen the last category you viewed.'],
+      ['exportPreferences','Export settings','action','export',null,'Download a backup of your customization settings.'],
+      ['resetVisuals','Reset appearance','action','resetVisuals',null,'Reset visual customization to defaults.'],
+      ['resetAll','Reset all preferences','action','resetAll',null,'Reset all custom preferences to defaults.']
+    ]}
+  ];
+  const customSettingMap=new Map();
+  for(const group of customSettingGroups)for(const item of group.items)customSettingMap.set(item[0],item);
+  const visualDefaults={
+    theme:'dark-green',wallpaper:'forest',accent:'#25c978',bubble:'#159f63',incoming:'#174d37',
+    pageBg:'#061b12',sidebarBg:'#0d2d20',panelBg:'#0d2d20',chatBg:'#08251a',textColor:'#ecfff5',mutedColor:'#a9d8bd',lineColor:'#245641',
+    cornerRadius:16,bubbleRadius:19,shadow:'soft',density:'normal',shape:'rounded',sidebarWidth:340,messageWidth:560,showTagline:true,
+    headerColor:'#087f50',navColor:'#087f50',selectedColor:'#15523a',searchBg:'#0a2419',composerBg:'#0a2419',buttonText:'#f2fff8',linkColor:'#55e69a',onlineColor:'#25c978',unreadColor:'#25c978',dangerColor:'#ff7181',successColor:'#55e69a',reactionBg:'#123f2c',reactionText:'#c9f6dc',tooltipBg:'#172525',tooltipText:'#ffffff',avatarBg:'#123f2c',avatarText:'#55e69a',filterBg:'#123f2c',filterText:'#a9d8bd',focusColor:'#55e69a',
+    fontSize:14,lineHeight:1.35,messageGap:10,bubblePadding:12,showTimestamps:true,showReadReceipts:true,groupMessages:true,linkPreview:true,enterToSend:true,showEmojiButton:true,showAttachmentButton:true,showVoiceButton:true,showMessageActions:true,showAvatars:true,showSenderNames:true,messageAnimation:'subtle',bubbleStyle:'classic',linkStyle:'underline',longMessageWrap:'natural',
+    headerHeight:76,avatarSize:44,conversationRowHeight:12,composerHeight:42,contentPadding:22,modalWidth:'wide',roundedCards:true,compactToolbar:false,showNavLabels:true,showConversationPreview:true,showConversationTime:true,showUnreadCounts:true,sidebarDividers:true,centerEmptyState:true,fullHeightChat:true,stickyComposer:true,mobileLargeButtons:false,
+    fontFamily:'system',headingSize:24,smallTextSize:12,fontWeight:'normal',headingWeight:'bold',letterSpacing:0,uppercaseLabels:false,underlineLinks:true,italicMetadata:false,emojiScale:1,buttonTextSize:13,inputTextSize:14,profileNameSize:18,conversationNameSize:14,timestampSize:10,textContrast:'normal',fontSmoothing:true,
+    wallpaperOpacity:100,wallpaperPattern:'gradient',wallpaperMotion:false,wallpaperBlur:0,wallpaperColor1:'#071f16',wallpaperColor2:'#0b2b1e',wallpaperColor3:'#08251a',wallpaperBlend:'normal',wallpaperFit:'cover',wallpaperPosition:'center',wallpaperContrast:100,wallpaperSaturation:100,wallpaperBrightness:100,wallpaperNoise:false,wallpaperGrid:false,wallpaperBorder:false,wallpaperTint:'#0b2b1e',wallpaperTintStrength:20,wallpaperCustomEnabled:false,
+    sound:'soft',quietEnabled:false,quietStart:'22:00',quietEnd:'07:00',notifyMessages:true,notifyCalls:true,notifyFriendRequests:true,notifyGroupEvents:true,notifyReactions:false,notifyMentions:true,notifyPreviews:true,notifyVibration:false,notifyBadge:true,notifyDesktop:true,notifySoundVolume:35,notifyRepeat:false,notifyGroupDigest:'instant',notifyChatDigest:'preview',notifyDuringCall:true,
+    reduceMotion:false,largeText:false,focusOutlines:true,screenReaderLabels:true,keyboardShortcuts:true,alwaysShowActions:false,disableAutoplay:true,limitFlashing:true,touchTargets:'normal',readingWidth:'normal',plainAnimations:true,showButtonText:true,colorBlindMode:'off',captionStyle:'standard',timeFormat:'locale',motionSpeed:'normal',confirmDestructive:true,
+    allowCalls:true,allowMessages:'friends',lastSeen:'friends',statusVisibility:'friends',readReceipts:true,onlineStatus:true,profileSearchable:true,messagePreviewPrivacy:false,callPreviewPrivacy:false,autoLock:'never',blockUnknownCalls:false,friendRequests:'everyone',groupInvites:'friends',activityVisibility:'friends',profilePhotoVisibility:'everyone',statusExpiry:'day',downloadMedia:true,linkSafety:true,reportShortcut:true,privacyHints:true,
+    statusText:'',profileCoverColor:'#0b6844',profileCoverColor2:'#39b77c',profileCoverStyle:'gradient',profileAccent:'#25c978',profileAvatarShape:'circle',profileAvatarBorder:true,profileAvatarBorderColor:'#25c978',profileNameStyle:'bold',profileShowStatus:true,profileShowPronouns:false,profileShowJoined:false,profileBioSize:14,profileCardStyle:'soft',profileCoverHeight:130,profileAvatarSize:92,profileShowOnline:true,profileButtonStyle:'rounded',profilePrivacyBadge:true,
+    groupShowAvatars:true,groupShowNames:true,groupMentionStyle:'accent',groupNoticeStyle:'banner',groupAvatarShape:'rounded',groupAvatarColor:'#123f2c',groupAvatarText:'#55e69a',groupEvents:true,groupPolls:true,groupPinnedNotices:true,groupMemberCount:true,groupDescription:true,groupMessageSpacing:10,groupBubbleStyle:'classic',groupNoticeColor:'#174d37',groupMentionColor:'#55e69a',groupAdminBadge:true,groupEventReminders:true,groupPollResults:true,groupHeaderCompact:false,
+    hoverEffects:true,buttonMotion:true,pageTransition:'fade',modalAnimation:'fade',typingAnimation:true,loadingAnimation:'dots',toastAnimation:'slide',focusAnimation:true,scrollBehavior:true,emojiAnimation:true,callPulse:true,onlinePulse:false,skeletonMotion:false,sidebarMotion:'subtle',reactionMotion:true,celebrationEffects:false,
+    saveOnDevice:true,syncPreferences:true,confirmDestructive:true,showDebugInfo:false,compactDates:false,dateFormat:'locale',defaultChatTab:'messages',defaultFilter:'all',searchScope:'all',mediaQuality:'balanced',autoDownloadMedia:'wifi',dataSaver:false,cacheMedia:true,startupPage:'messages',showWhatsNew:true,settingsCategoryRemember:true
   };
-  renderMessages=async function(){
+  upgradeDefaults={...upgradeDefaults,...visualDefaults};
+  upgradePrefs={...upgradeDefaults,...upgradePrefs};
+  const customCssVars={
+    accent:'--tv-accent',bubble:'--tv-outgoing',incoming:'--tv-incoming',pageBg:'--tv-page-bg',sidebarBg:'--tv-sidebar-bg',panelBg:'--tv-panel-bg',chatBg:'--tv-chat-bg',textColor:'--tv-text',mutedColor:'--tv-muted',lineColor:'--tv-line',cornerRadius:'--tv-radius',bubbleRadius:'--tv-bubble-radius',fontSize:'--tv-font-size',sidebarWidth:'--tv-sidebar-width',messageWidth:'--tv-message-width',messageGap:'--tv-space',headerColor:'--tv-header-color',navColor:'--tv-nav-color',selectedColor:'--tv-selected-color',searchBg:'--tv-search-bg',composerBg:'--tv-composer-bg',buttonText:'--tv-button-text',linkColor:'--tv-link-color',onlineColor:'--tv-online-color',unreadColor:'--tv-unread-color',dangerColor:'--tv-danger-color',successColor:'--tv-success-color',reactionBg:'--tv-reaction-bg',reactionText:'--tv-reaction-text',tooltipBg:'--tv-tooltip-bg',tooltipText:'--tv-tooltip-text',avatarBg:'--tv-avatar-bg',avatarText:'--tv-avatar-text',filterBg:'--tv-filter-bg',filterText:'--tv-filter-text',focusColor:'--tv-focus-color',lineHeight:'--tv-line-height',bubblePadding:'--tv-bubble-padding',headerHeight:'--tv-header-height',avatarSize:'--tv-avatar-size',conversationRowHeight:'--tv-conversation-row-height',composerHeight:'--tv-composer-height',contentPadding:'--tv-content-padding',headingSize:'--tv-heading-size',smallTextSize:'--tv-small-text-size',letterSpacing:'--tv-letter-spacing',emojiScale:'--tv-emoji-scale',buttonTextSize:'--tv-button-text-size',inputTextSize:'--tv-input-text-size',profileNameSize:'--tv-profile-name-size',conversationNameSize:'--tv-conversation-name-size',timestampSize:'--tv-timestamp-size',wallpaperOpacity:'--tv-wallpaper-opacity',wallpaperBlur:'--tv-wallpaper-blur',wallpaperContrast:'--tv-wallpaper-contrast',wallpaperSaturation:'--tv-wallpaper-saturation',wallpaperBrightness:'--tv-wallpaper-brightness',wallpaperTint:'--tv-wallpaper-tint',wallpaperTintStrength:'--tv-wallpaper-tint-strength',profileCoverColor:'--tv-profile-cover-1',profileCoverColor2:'--tv-profile-cover-2',profileAccent:'--tv-profile-accent',profileAvatarBorderColor:'--tv-avatar-border',profileBioSize:'--tv-profile-bio-size',profileCoverHeight:'--tv-profile-cover-height',profileAvatarSize:'--tv-profile-avatar-size',groupMessageSpacing:'--tv-group-message-spacing',groupAvatarColor:'--tv-group-avatar-bg',groupAvatarText:'--tv-group-avatar-text',groupNoticeColor:'--tv-group-notice-color',groupMentionColor:'--tv-group-mention-color',notifySoundVolume:'--tv-notify-volume'
+  };
+  const optionSets={
+    theme:['dark-green','light','dark'],wallpaper:['forest','ocean','sunset','stars','blossom','sand','lavender','plain'],shadow:['none','soft','strong'],density:['compact','normal','comfortable'],shape:['rounded','sharp','pill'],fontFamily:['system','Arial','Georgia','Verdana','Trebuchet','monospace'],fontWeight:['300','400','500','700'],headingWeight:['400','500','700','800'],messageAnimation:['off','subtle','playful'],bubbleStyle:['classic','flat','outlined','soft shadow'],linkStyle:['underline','accent','bold'],longMessageWrap:['natural','tighter','roomy'],modalWidth:['narrow','standard','wide'],wallpaperPattern:['none','gradient','dots','stars','waves'],wallpaperBlend:['normal','soft-light','multiply'],wallpaperFit:['cover','contain','stretch'],wallpaperPosition:['center','top','bottom','left','right'],notifyGroupDigest:['instant','hourly','off'],notifyChatDigest:['preview','name','quiet'],touchTargets:['compact','normal','large'],readingWidth:['narrow','normal','wide'],colorBlindMode:['off','deuteranopia','protanopia','tritanopia'],captionStyle:['standard','large','high-contrast'],motionSpeed:['slow','normal','fast','off'],allowMessages:['friends','everyone'],lastSeen:['friends','nobody','everyone'],statusVisibility:['friends','everyone','nobody'],autoLock:['never','1 minute','5 minutes'],friendRequests:['everyone','nobody'],groupInvites:['friends','everyone'],activityVisibility:['friends','nobody','everyone'],profilePhotoVisibility:['everyone','friends','nobody'],statusExpiry:['1 hour','1 day','1 week','never'],profileCoverStyle:['gradient','solid','pattern','minimal'],profileAvatarShape:['circle','rounded-square','square'],profileNameStyle:['normal','bold','elegant'],profileCardStyle:['soft','flat','outlined'],profileButtonStyle:['rounded','sharp','pill'],groupMentionStyle:['accent','bold','pill'],groupNoticeStyle:['banner','inline','compact'],groupAvatarShape:['circle','rounded-square','square'],groupBubbleStyle:['classic','flat','outlined'],pageTransition:['off','fade','slide'],modalAnimation:['off','fade','scale'],loadingAnimation:['dots','spinner','minimal','off'],toastAnimation:['off','fade','slide'],sidebarMotion:['off','subtle','slide'],timeFormat:['locale','12-hour','24-hour'],dateFormat:['locale','month-first','day-first','year-first'],defaultChatTab:['messages','calls'],defaultFilter:['all','unread','groups','friends'],searchScope:['all','current','people'],mediaQuality:['data-saver','balanced','high'],autoDownloadMedia:['never','wifi','always'],startupPage:['messages','calls']};
+  function customDisplayValue(key,value){if(typeof value==='boolean')return value;if(value===null||value===undefined)return '';return String(value)}
+  function customNormalize(key,value){if(['theme','wallpaper','density','shape','fontFamily','shadow'].includes(key))return String(value).toLowerCase();return value}
+  function customApplyPrefs(){
+    const p=upgradePrefs,rootStyle=document.documentElement.style;
+    const colorKeys=['accent','bubble','incoming','pageBg','sidebarBg','panelBg','chatBg','textColor','mutedColor','lineColor','headerColor','navColor','selectedColor','searchBg','composerBg','buttonText','linkColor','onlineColor','unreadColor','dangerColor','successColor','reactionBg','reactionText','tooltipBg','tooltipText','avatarBg','avatarText','filterBg','filterText','focusColor','wallpaperColor1','wallpaperColor2','wallpaperColor3','wallpaperTint','profileCoverColor','profileCoverColor2','profileAccent','profileAvatarBorderColor','groupAvatarColor','groupAvatarText','groupNoticeColor','groupMentionColor'];
+    for(const key of colorKeys)if(/^#[0-9a-f]{6}$/i.test(p[key]||'')){if(customCssVars[key])rootStyle.setProperty(customCssVars[key],p[key])}
+    const unitVars={cornerRadius:'px',bubbleRadius:'px',fontSize:'px',sidebarWidth:'px',messageWidth:'px',messageGap:'px',lineHeight:'',bubblePadding:'px',headerHeight:'px',avatarSize:'px',conversationRowHeight:'px',composerHeight:'px',contentPadding:'px',headingSize:'px',smallTextSize:'px',letterSpacing:'px',emojiScale:'',buttonTextSize:'px',inputTextSize:'px',profileNameSize:'px',conversationNameSize:'px',timestampSize:'px',wallpaperOpacity:'%',wallpaperBlur:'px',wallpaperContrast:'%',wallpaperSaturation:'%',wallpaperBrightness:'%',wallpaperTintStrength:'%',profileBioSize:'px',profileCoverHeight:'px',profileAvatarSize:'px',groupMessageSpacing:'px',notifySoundVolume:'%'};
+    for(const [key,cssvar] of Object.entries(customCssVars)){if(p[key]!==undefined&&p[key]!==null){const unit=unitVars[key]??(key==='sidebarWidth'||key==='messageWidth'?'px':'');rootStyle.setProperty(cssvar,String(p[key])+unit)}}
+    const fontMap={system:'system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',Arial:'Arial,sans-serif',Georgia:'Georgia,serif',Verdana:'Verdana,sans-serif',Trebuchet:'"Trebuchet MS",sans-serif',monospace:'ui-monospace,SFMono-Regular,monospace'};
+    rootStyle.setProperty('--tv-font',fontMap[p.fontFamily]||fontMap.system);
+    document.body.dataset.tvDensity=p.density||'normal';document.body.dataset.tvShape=p.shape||'rounded';document.body.dataset.tvMotion=p.reduceMotion||p.motionSpeed==='off'?'reduced':'normal';document.body.dataset.tvContrast=p.textContrast==='high'||p.textContrast==='High'?'high':'normal';document.body.dataset.tvWallpaper=p.wallpaper||'forest';
+    document.body.classList.toggle('dark',p.theme!=='light');
+    const rules=[];
+    rules.push('.main,.messages{background:var(--tv-chat-bg)!important}');
+    rules.push('.side-title,.chat-title,.conv-name,.modal h2{color:var(--tv-text)!important}');
+    rules.push('.stat,.meta,.chat-sub,.conv-preview,.conv-time,.tagline{color:var(--tv-muted)!important}');
+    rules.push('.primary,.send{background:var(--tv-accent)!important;color:var(--tv-button-text,#fff)!important}');
+    rules.push('.mine .bubble{background:var(--tv-outgoing)!important;color:#fff!important}.theirs .bubble{background:var(--tv-incoming)!important;color:var(--tv-text)!important}');
+    rules.push('.search-wrap input{background:var(--tv-search-bg)!important}.composer,.composer textarea{background:var(--tv-composer-bg)!important}');
+    rules.push('.icon-btn,.tool-round{color:var(--tv-nav-color,var(--tv-accent))!important}');
+    rules.push('.conv.active,.filter-tab.active,.choice-row.selected{background:var(--tv-selected-color)!important}');
+    rules.push('.reaction-picker,.upgrade-reaction{background:var(--tv-reaction-bg)!important;color:var(--tv-reaction-text)!important}');
+    rules.push('a{color:var(--tv-link-color)!important}');
+    rules.push('.online-dot{background:var(--tv-online-color)!important}.unread-dot,.nav-count{background:var(--tv-unread-color)!important}');
+    rules.push('.profile-cover{height:var(--tv-profile-cover-height)!important;background:linear-gradient(135deg,var(--tv-profile-cover-1),var(--tv-profile-cover-2))!important}');
+    rules.push('.profile-avatar-wrap .big-avatar{width:var(--tv-profile-avatar-size)!important;height:var(--tv-profile-avatar-size)!important}');
+    rules.push('.avatar{background:var(--tv-avatar-bg)!important;color:var(--tv-avatar-text)!important;border:var(--tv-avatar-border-width,0px) solid var(--tv-avatar-border,#25c978)}');
+    rules.push('.group-avatar{background:var(--tv-group-avatar-bg)!important;color:var(--tv-group-avatar-text)!important}');
+    rules.push('.chat-head{height:var(--tv-header-height)!important;min-height:var(--tv-header-height)!important}');
+    rules.push('.conv{padding-top:var(--tv-conversation-row-height)!important;padding-bottom:var(--tv-conversation-row-height)!important}');
+    rules.push('.messages{padding-left:var(--tv-content-padding)!important;padding-right:var(--tv-content-padding)!important}');
+    rules.push('.bubble{padding:10px var(--tv-bubble-padding)!important;line-height:var(--tv-line-height)!important;font-size:var(--tv-font-size)!important}');
+    rules.push('.chat-title{font-size:var(--tv-profile-name-size,18px)!important}.conv-name{font-size:var(--tv-conversation-name-size,14px)!important}.meta{font-size:var(--tv-timestamp-size,10px)!important}');
+    rules.push('.side-title{font-size:var(--tv-heading-size,24px)!important;letter-spacing:var(--tv-letter-spacing,0px)!important}');
+    rules.push('label,.stat,.upgrade-note{font-size:var(--tv-small-text-size,12px)}button{font-size:var(--tv-button-text-size,13px)}input,textarea{font-size:var(--tv-input-text-size,14px)}');
+    rules.push('.message-actions{opacity:'+(p.alwaysShowActions?'1':'.3')+'!important}');
+    rules.push('.messages{background-size:'+String(p.wallpaperFit||'cover')+'!important;filter:brightness('+(Number(p.wallpaperBrightness||100)/100)+') saturate('+(Number(p.wallpaperSaturation||100)/100)+') contrast('+(Number(p.wallpaperContrast||100)/100)+')!important}');
+    rules.push('body[data-tv-shape="sharp"] .modal,body[data-tv-shape="sharp"] .conv,body[data-tv-shape="sharp"] button,body[data-tv-shape="sharp"] input,body[data-tv-shape="sharp"] textarea{border-radius:4px!important}');
+    rules.push('body[data-tv-shape="pill"] .bubble,body[data-tv-shape="pill"] .icon-btn,body[data-tv-shape="pill"] .tool-round,body[data-tv-shape="pill"] .filter-tab{border-radius:999px!important}');
+    rules.push('body[data-tv-contrast="high"]{filter:contrast(1.12)}');
+    let style=document.getElementById('tevlo-dynamic-custom-style');if(!style){style=document.createElement('style');style.id='tevlo-dynamic-custom-style';document.head.appendChild(style)}style.textContent=rules.join('\n');
+    document.querySelectorAll('#newChat').forEach(el=>el.remove());
+    const tagline=document.querySelector('.side-head .tagline');if(tagline)tagline.style.display=p.showTagline===false?'none':'';
+    const composer=$('.composer');if(composer)composer.style.minHeight=(Number(p.composerHeight)||42)+'px';
+    document.querySelectorAll('.conv-preview').forEach(el=>el.style.display=p.showConversationPreview===false?'none':'');
+    document.querySelectorAll('.conv-time').forEach(el=>el.style.display=p.showConversationTime===false?'none':'');
+    document.querySelectorAll('.unread-dot,.nav-count').forEach(el=>el.style.display=p.showUnreadCounts===false?'none':'');
+    document.querySelectorAll('.avatar').forEach(el=>el.style.display=p.showAvatars===false?'none':'');
+    document.querySelectorAll('.meta').forEach(el=>el.style.display=p.showTimestamps===false?'none':'');
+    document.querySelectorAll('.message-actions').forEach(el=>el.style.opacity=p.showMessageActions===false?'0':p.alwaysShowActions?'1':'');
+    document.querySelectorAll('.app-nav .nav-label').forEach(el=>el.style.display=p.showNavLabels===false?'none':'');
+    if(p.largeText)document.documentElement.style.setProperty('--tv-font-size',String(Math.max(16,Number(p.fontSize)||14))+'px');
+    if(p.hoverEffects===false)document.documentElement.style.setProperty('--tv-hover-disabled','1');else document.documentElement.style.removeProperty('--tv-hover-disabled');
+  }
+  const customCategories=customSettingGroups.map(g=>g.name);
+  let customActiveCategory=upgradePrefs.settingsCategoryRemember?(upgradePrefs.lastSettingsCategory||'Appearance'):'Appearance';
+  function customControlHtml(item){
+    const [key,label,type,def,options,desc]=item;const val=upgradePrefs[key]??def;
+    if(type==='action')return '<button class="secondary custom-setting-control" data-custom-action="'+key+'">'+(key==='exportPreferences'?'Export settings':key==='resetVisuals'?'Reset appearance':'Reset all settings')+'</button>';
+    if(type==='toggle')return '<button type="button" class="switch custom-setting-control '+(val?'on':'')+'" role="switch" aria-checked="'+(val?'true':'false')+'" data-custom-key="'+key+'" data-custom-type="toggle" aria-label="'+esc(label)+'"></button>';
+    if(type==='color')return '<input class="custom-setting-control" type="color" data-custom-key="'+key+'" data-custom-type="color" value="'+esc(String(val))+'">';
+    if(type==='range'){const [min,max,step]=options;return '<input class="custom-setting-control" type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+Number(val)+'" data-custom-key="'+key+'" data-custom-type="range"><span class="custom-range-value" data-range-label="'+key+'">'+esc(String(val))+'</span>'}
+    if(type==='time')return '<input class="custom-setting-control" type="time" data-custom-key="'+key+'" data-custom-type="time" value="'+esc(String(val))+'">';
+    if(type==='text')return '<input class="custom-setting-control" type="text" maxlength="80" data-custom-key="'+key+'" data-custom-type="text" value="'+esc(String(val))+'" placeholder="Write a short status">';
+    const opts=options||(optionSets[key]||[def]);const normalized=String(val).toLowerCase();
+    return '<select class="custom-setting-control" data-custom-key="'+key+'" data-custom-type="select">'+opts.map(o=>{const v=String(o).toLowerCase().replaceAll(' ','-');const chosen=(v===normalized||String(o)===String(val)||({'dark-green':'forest-dark','forest-dark':'dark-green','12-hour':'12-hour','24-hour':'24-hour'}[normalized]===v));return '<option value="'+esc(v)+'" '+(chosen?'selected':'')+'>'+esc(String(o))+'</option>'}).join('')+'</select>';
+  }
+  function customRenderSettings(query=''){
+    const modal=$('#modal');if(!modal)return;
+    const q=query.trim().toLowerCase(),all=customSettingGroups.flatMap(g=>g.items.map(item=>({group:g,item})));
+    const shown=all.filter(({group,item})=>(customActiveCategory==='All'||group.name===customActiveCategory)&&(!q||(group.name+' '+item[1]+' '+item[5]).toLowerCase().includes(q)));
+    const categories=['All',...customCategories];
+    const body=$('#customSettingsLayout');if(!body)return;
+    $('#customSettingsCategories').innerHTML=categories.map(cat=>'<button type="button" class="custom-settings-category '+(customActiveCategory===cat?'active':'')+'" data-custom-category="'+esc(cat)+'">'+esc(cat)+'</button>').join('');
+    $('#customSettingsList').innerHTML=shown.length?shown.map(({item})=>'<div class="custom-setting-row"><div><div class="custom-setting-title">'+esc(item[1])+'</div><div class="custom-setting-desc">'+esc(item[5]||'Personalize this part of Tevlo.')+'</div></div><div>'+customControlHtml(item)+'</div></div>').join(''):'<div class="settings-card">No settings match that search.</div>';
+    $('#customSettingsCount').textContent=shown.length+' settings shown · '+all.length+' available';
+    $('#customSettingsCategories').querySelectorAll('[data-custom-category]').forEach(btn=>btn.onclick=()=>{customActiveCategory=btn.dataset.customCategory;if(upgradePrefs.settingsCategoryRemember)saveUpgradePrefs({lastSettingsCategory:customActiveCategory});customRenderSettings($('#customSettingsSearch').value)});
+    $('#customSettingsList').querySelectorAll('[data-custom-key]').forEach(el=>{
+      const key=el.dataset.customKey,type=el.dataset.customType;
+      if(type==='toggle')el.onclick=async()=>{const val=!el.classList.contains('on');el.classList.toggle('on',val);el.setAttribute('aria-checked',String(val));await saveUpgradePrefs({[key]:val});customApplyPrefs()};
+      else if(type==='range')el.oninput=()=>{const lab=$('[data-range-label="'+key+'"]');if(lab)lab.textContent=el.value;upgradePrefs[key]=Number(el.value);customApplyPrefs()};
+      if(type==='range')el.onchange=async()=>{await saveUpgradePrefs({[key]:Number(el.value)});customApplyPrefs()};
+      else if(type==='color'||type==='select'||type==='time'||type==='text')el.onchange=async()=>{let val=el.value;if(type==='select'){const vals=optionSets[key]||[];if(vals.length){const match=vals.find(v=>String(v).toLowerCase().replaceAll(' ','-')===val);if(match!==undefined)val=String(match).toLowerCase().replaceAll(' ','-')}if(['theme','wallpaper','density','shape','fontFamily','shadow'].includes(key))val=val.toLowerCase();if(key==='theme'&&val==='forest-dark')val='dark-green';if(key==='wallpaper')val=val.toLowerCase();}await saveUpgradePrefs({[key]:val});customApplyPrefs();if(type==='select'&&key==='wallpaper')document.body.dataset.tvWallpaper=val;};
+    });
+    $('#customSettingsList').querySelectorAll('[data-custom-action]').forEach(btn=>btn.onclick=async()=>{
+      const key=btn.dataset.customAction;
+      if(key==='exportPreferences'){const blob=new Blob([JSON.stringify(upgradePrefs,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='tevlo-settings.json';a.click();URL.revokeObjectURL(url);toast('Settings exported.');return}
+      if(key==='resetVisuals'){const visualKeys=customSettingGroups.slice(0,5).flatMap(g=>g.items.map(i=>i[0]));const reset={};for(const k of visualKeys)if(visualDefaults[k]!==undefined)reset[k]=visualDefaults[k];await saveUpgradePrefs(reset);customApplyPrefs();customRenderSettings($('#customSettingsSearch').value);toast('Appearance settings reset.');return}
+      if(key==='resetAll'&&confirm('Reset all Tevlo customization preferences?')){await saveUpgradePrefs({...visualDefaults,...upgradeDefaults});customApplyPrefs();customRenderSettings($('#customSettingsSearch').value);toast('Preferences reset.')}
+    });
+  }
+  settingsModal=function(){
+    customActiveCategory=upgradePrefs.settingsCategoryRemember?(upgradePrefs.lastSettingsCategory||'Appearance'):'Appearance';
+    showModal('<div class="custom-settings-modal"><div class="modal-head"><div><h2>Customize Tevlo</h2><div class="stat">Personalize colors, chats, layout, privacy preferences, and more.</div></div><button class="ghost" data-close aria-label="Close settings">✕</button></div><div class="custom-settings-toolbar"><input id="customSettingsSearch" class="custom-settings-search" type="search" placeholder="Search hundreds of settings…"><button class="secondary" id="customResetView">Reset view</button></div><div class="custom-settings-layout" id="customSettingsLayout"><nav class="custom-settings-categories" id="customSettingsCategories" aria-label="Settings categories"></nav><section class="custom-settings-list" id="customSettingsList" aria-live="polite"></section></div><div class="custom-settings-footer"><span id="customSettingsCount" class="custom-settings-count"></span><div style="display:flex;gap:8px"><button class="secondary" id="customExportSettings">Export</button><button class="primary" id="customSaveClose">Done</button></div></div></div>');
+    const search=$('#customSettingsSearch');search.oninput=()=>{if(search.value.trim())customActiveCategory='All';customRenderSettings(search.value)};
+    $('#customResetView').onclick=()=>{search.value='';customActiveCategory='Appearance';customRenderSettings('')};
+    $('#customExportSettings').onclick=()=>{const blob=new Blob([JSON.stringify(upgradePrefs,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='tevlo-settings.json';a.click();URL.revokeObjectURL(url);toast('Settings exported.')};
+    $('#customSaveClose').onclick=()=>{customApplyPrefs();closeModal();toast('Your Tevlo customizations are applied.')};
+    customRenderSettings('');
+  };
+    renderMessages=async function(){
     await oldRenderMessages();
     const wrap=$('#messages');if(!wrap||!SUPABASE_READY||!state.messages?.length)return;
     const ids=state.messages.map(m=>m.id).filter(id=>/^[0-9a-f-]{36}$/i.test(id));if(!ids.length)return;
