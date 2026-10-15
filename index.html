@@ -349,6 +349,49 @@ html,body,#root,.app{width:100%;min-width:0;min-height:100%;margin:0}
 }
 [data-tevlo-incoming-banner]{box-sizing:border-box;max-width:calc(100vw - 20px);flex-wrap:wrap}
 [data-tevlo-incoming-banner] button{min-height:40px;white-space:nowrap}
+
+/* FINAL chat-flow override: one message per row, stacked top-to-bottom, never a horizontal strip. */
+#messages{
+  display:flex!important;flex-direction:column!important;flex-wrap:nowrap!important;
+  align-items:stretch!important;justify-content:flex-start!important;
+  width:100%!important;min-width:0!important;overflow-x:hidden!important;
+  overflow-y:auto!important;gap:12px!important;
+}
+#messages>.row{
+  display:flex!important;flex:0 0 auto!important;flex-direction:row!important;
+  flex-wrap:nowrap!important;float:none!important;position:relative!important;
+  width:100%!important;max-width:100%!important;min-width:0!important;
+  margin:0!important;clear:both!important;justify-content:flex-start!important;
+  align-items:flex-start!important;
+}
+#messages>.row.mine,#messages>.row.theirs{justify-content:flex-start!important}
+#messages>.row>.message-stack{
+  display:flex!important;flex:0 1 auto!important;flex-direction:column!important;
+  float:none!important;position:relative!important;min-width:0!important;
+  width:auto!important;max-width:min(82%,620px)!important;margin:0!important;
+  align-items:flex-start!important;
+}
+#messages>.row .bubble{
+  display:block!important;float:none!important;position:relative!important;
+  width:fit-content!important;max-width:100%!important;min-width:0!important;
+  white-space:pre-wrap!important;overflow-wrap:anywhere!important;
+  word-break:normal!important;align-self:flex-start!important;
+}
+#messages>.row .meta,#messages>.row .message-actions{
+  align-self:flex-start!important;text-align:left!important;max-width:100%!important;
+}
+#messages>.row.mine .bubble{
+  background:linear-gradient(135deg,#16965d,#087f50)!important;color:#fff!important;
+  border-radius:16px 16px 16px 5px!important;
+}
+#messages>.row.theirs .bubble{
+  background:#eef3ef!important;color:#172820!important;
+  border-radius:16px 16px 16px 5px!important;
+}
+@media(max-width:800px){
+  #messages{gap:10px!important;padding:16px 12px!important}
+  #messages>.row>.message-stack{max-width:90%!important}
+}
 </style>
 
 </head>
