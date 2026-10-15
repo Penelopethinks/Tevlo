@@ -636,7 +636,7 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
 (()=>{
   const upgradeDefaults={theme:'light',wallpaper:'forest',bubble:'#159f63',accent:'#25c978',sound:'soft',lastSeen:'friends',allowCalls:true,allowMessages:'friends',quietStart:'22:00',quietEnd:'07:00',quietEnabled:false,notifications:true,readReceipts:true,statusText:'',statusVisibility:'friends',pinnedMessages:[],mutedChats:[]};
   let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0,callOfferRetryTimers=new Map(),callOrphanIce=new Map();
-  const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages,oldStartCall=startCall,oldHandleCallSignal=handleCallSignal;
+  const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages,baseStartCall=startCall,baseHandleCallSignal=handleCallSignal;
   async function loadUpgradePrefs(){
     upgradePrefs={...upgradeDefaults,...visualDefaults,...JSON.parse(localStorage.getItem('tevlo_preferences')||'{}')};
     if(SUPABASE_READY&&state.user?.id){
@@ -697,16 +697,16 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
       if(currentId===p.callId){try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){}return}
       const early=callOrphanIce.get(p.callId)||[];
       if(early.length){p={...p,queuedIce:[...(p.queuedIce||[]),...early]};callOrphanIce.delete(p.callId)}
-      await oldHandleCallSignal(p);
+      await baseHandleCallSignal(p);
       if(tevloPendingCall?.callId===p.callId){try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){console.warn('Call receipt could not be sent',e)}}
       return;
     }
     if(p.kind==='ice'&&!tevloCall&&tevloPendingCall?.callId!==p.callId){const list=callOrphanIce.get(p.callId)||[];if(list.length<80)list.push(p.data);callOrphanIce.set(p.callId,list);return}
     if(['answer','hangup','decline','busy'].includes(p.kind))clearCallOfferRetry(p.callId);
-    return oldHandleCallSignal(p);
+    return baseHandleCallSignal(p);
   };
   startCall=async function(mode){
-    await oldStartCall(mode);
+    await baseStartCall(mode);
     const call=tevloCall;if(!call||call.incoming||!call.pc?.localDescription)return;
     clearCallOfferRetry(call.callId);
     const entry={attempts:0,timer:null};
