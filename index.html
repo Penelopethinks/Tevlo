@@ -707,6 +707,18 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     if(error)throw new Error('Call signal could not be sent: '+error.message);
     return {status:'ok'};
   };
+  function showTevloIncomingBanner(p){
+    document.querySelector('[data-tevlo-incoming-banner]')?.remove();
+    const name=p.name||state.conversations.find(c=>c.id===p.conversationId)?.name||'Tevlo user';
+    const banner=document.createElement('div');banner.dataset.tevloIncomingBanner='true';
+    banner.style.cssText='position:fixed;top:14px;left:50%;transform:translateX(-50%);width:min(520px,calc(100vw - 24px));z-index:10000;background:#103b29;color:#f2fff8;border:1px solid #42d58a;border-radius:18px;padding:16px 18px;box-shadow:0 16px 60px #0007;display:flex;align-items:center;gap:12px;font:500 14px system-ui,sans-serif';
+    const copy=document.createElement('div');copy.style.cssText='flex:1;min-width:0';
+    const title=document.createElement('strong');title.textContent=(p.mode==='video'?'Incoming video call':'Incoming voice call');title.style.cssText='display:block;font-size:15px;margin-bottom:4px';
+    const sub=document.createElement('span');sub.textContent=name+' is calling you';sub.style.cssText='display:block;color:#bfe9d1;overflow-wrap:anywhere';copy.append(title,sub);
+    const accept=document.createElement('button');accept.textContent='Accept';accept.style.cssText='border:0;border-radius:12px;padding:10px 13px;background:#35d98a;color:#07331e;font-weight:800;cursor:pointer';accept.onclick=()=>{banner.remove();window.focus();acceptIncomingCall()};
+    const decline=document.createElement('button');decline.textContent='Decline';decline.style.cssText='border:1px solid #65917a;border-radius:12px;padding:10px 12px;background:transparent;color:#fff;font-weight:700;cursor:pointer';decline.onclick=()=>{banner.remove();finishCall(true,'Call declined')};
+    banner.append(copy,accept,decline);document.body.appendChild(banner);return banner;
+  }
   function clearCallOfferRetry(callId){const entry=callOfferRetryTimers.get(callId);if(entry){clearInterval(entry.timer);callOfferRetryTimers.delete(callId)}}
   handleCallSignal=async function(p){
     if(!p)return;
@@ -717,7 +729,7 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
       const early=callOrphanIce.get(p.callId)||[];
       if(early.length){p={...p,queuedIce:[...(p.queuedIce||[]),...early]};callOrphanIce.delete(p.callId)}
       await baseHandleCallSignal(p);
-      if(tevloPendingCall?.callId===p.callId){try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){console.warn('Call receipt could not be sent',e)}}
+      if(tevloPendingCall?.callId===p.callId){showTevloIncomingBanner(p);try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){console.warn('Call receipt could not be sent',e)}}
       return;
     }
     if(p.kind==='ice'&&!tevloCall&&tevloPendingCall?.callId!==p.callId){const list=callOrphanIce.get(p.callId)||[];if(list.length<80)list.push(p.data);callOrphanIce.set(p.callId,list);return}
