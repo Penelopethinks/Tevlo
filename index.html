@@ -382,16 +382,40 @@ function setupCallSignaling(){
  tevloCallChannel=sb.channel(callSignalChannelName(),{config:{private:true,broadcast:{self:false}}});
  tevloCallChannel.on('broadcast',{event:'signal'},({payload})=>handleCallSignal(payload)).subscribe(status=>{if(status==='CHANNEL_ERROR')console.warn('Tevlo call signaling channel error')});
 }
-let tevloIncomingAlertTimer=null,tevloCallAudioContext=null;
-function stopIncomingCallAlert(){if(tevloIncomingAlertTimer){clearInterval(tevloIncomingAlertTimer);tevloIncomingAlertTimer=null}try{tevloCallAudioContext?.close()}catch(e){}tevloCallAudioContext=null}
+let tevloIncomingAlertTimer=null,tevloCallAudioContext=null,tevloRingtoneStep=0;
+function tevloPrefs(){try{return JSON.parse(localStorage.getItem('tevlo_preferences')||'{}')}catch(e){return {}}}
+function tevloQuietNow(p=tevloPrefs()){
+ if(!p.quietEnabled)return false;
+ const now=new Date(),cur=now.getHours()*60+now.getMinutes(),toMin=v=>{const a=String(v||'').split(':').map(Number);return (a[0]||0)*60+(a[1]||0)};
+ const start=toMin(p.quietStart||'22:00'),end=toMin(p.quietEnd||'07:00');
+ return start===end?true:start<end?(cur>=start&&cur<end):(cur>=start||cur<end);
+}
+function stopIncomingCallAlert(){if(tevloIncomingAlertTimer){clearInterval(tevloIncomingAlertTimer);tevloIncomingAlertTimer=null}tevloRingtoneStep=0;try{tevloCallAudioContext?.close()}catch(e){}tevloCallAudioContext=null}
+function playTevloRingtone(preview=false){
+ const p=tevloPrefs(),style=p.ringtoneStyle||'gentle',volume=Math.max(0,Math.min(100,Number(p.ringtoneVolume??55)))/100,pitch=Math.max(200,Math.min(1400,Number(p.ringtonePitch??740)));
+ if(style==='off'||volume<=0){if(preview)toast('Ringtone is turned off or volume is zero.');return}
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;if(!AC){if(preview)toast('This browser cannot preview the ringtone.');return}
+  if(!tevloCallAudioContext||tevloCallAudioContext.state==='closed')tevloCallAudioContext=new AC();
+  const ctx=tevloCallAudioContext;const patterns={gentle:[0,1],classic:[0,1,2], 'double-chime':[0,1],digital:[0,2,1,2],pulse:[0,0,1],bell:[0,2]};
+  const notes=(patterns[style]||patterns.gentle),step=tevloRingtoneStep++%notes.length;
+  const frequencies=style==='digital'?[pitch,pitch*1.25,pitch*.9]:style==='bell'?[pitch*1.15,pitch*.75,pitch]:style==='pulse'?[pitch*.8,pitch,pitch*1.1]:[pitch,pitch*1.12,pitch*.88];
+  const osc=ctx.createOscillator(),gain=ctx.createGain();osc.type=style==='digital'?'square':style==='bell'?'triangle':'sine';
+  osc.frequency.value=frequencies[notes[step]%frequencies.length];gain.gain.setValueAtTime(Math.max(.001,volume*.075),ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.001,ctx.currentTime+.22);
+  osc.connect(gain);gain.connect(ctx.destination);osc.start();osc.stop(ctx.currentTime+.23);
+ }catch(e){console.warn('Ringtone audio unavailable',e);if(preview)toast('Your browser blocked ringtone preview. Try clicking Preview ringtone again.')}
+}
 function startIncomingCallAlert(name,mode){
- stopIncomingCallAlert();
- try{if(window.Notification&&Notification.permission==='granted'){const n=new Notification('Incoming '+(mode==='video'?'video':'voice')+' call',{body:name+' is calling you on Tevlo.',tag:'tevlo-incoming-call',renotify:true});n.onclick=()=>{window.focus();n.close()}}}catch(e){}
- try{const AC=window.AudioContext||window.webkitAudioContext;if(AC){tevloCallAudioContext=new AC();const beep=()=>{if(!tevloCallAudioContext||tevloCallAudioContext.state==='closed')return;const o=tevloCallAudioContext.createOscillator(),g=tevloCallAudioContext.createGain();o.type='sine';o.frequency.value=740;g.gain.value=.035;o.connect(g);g.connect(tevloCallAudioContext.destination);o.start();o.stop(tevloCallAudioContext.currentTime+.18)};beep();tevloIncomingAlertTimer=setInterval(beep,1800)}}catch(e){}
+ stopIncomingCallAlert();const p=tevloPrefs();
+ if(p.notifyCalls===false||p.notifications===false||tevloQuietNow(p))return;
+ try{if(p.notifyDesktop!==false&&window.Notification&&Notification.permission==='granted'){const n=new Notification('Incoming '+(mode==='video'?'video':'voice')+' call',{body:name+' is calling you on Tevlo.',tag:'tevlo-incoming-call',renotify:true});n.onclick=()=>{window.focus();n.close()}}}catch(e){}
+ const interval=Math.max(700,Math.min(3500,Number(p.ringtoneInterval??1800)));
+ if(p.ringtoneStyle!=='off'&&Number(p.ringtoneVolume??55)>0){playTevloRingtone(false);tevloIncomingAlertTimer=setInterval(()=>playTevloRingtone(false),interval)}
+ if(p.callVibration&&navigator.vibrate){try{navigator.vibrate([180,90,180])}catch(e){}}
 }
 function showCallOverlay({name,mode,status='Connecting…',incoming=false,video=false}){
  document.querySelector('.call-overlay')?.remove();
- const overlay=document.createElement('div');overlay.className='call-overlay';overlay.id='callOverlay';
+ const overlay=document.createElement('div');overlay.className='call-overlay';overlay.id='callOverlay';overlay.dataset.layout=tevloPrefs().callLayout||'classic';
  overlay.innerHTML=`<section class="call-card"><div class="stat" style="color:#7de8ad;letter-spacing:.16em;text-transform:uppercase;font-weight:800;font-size:10px">TEVLO · ${mode==='video'?'VIDEO CALL':'VOICE CALL'}</div><div class="call-avatar" id="callAvatar">${esc(initials(name))}</div><h2 id="callName" style="margin:0;font-size:27px;letter-spacing:-.04em">${esc(name)}</h2><div class="call-status" id="callStatus">${esc(status)}</div><div class="call-video-stage ${mode==='video'?'':'hidden'}" id="callVideoStage"><video id="remoteCallVideo" autoplay playsinline></video><video id="localCallVideo" class="call-local-video" autoplay muted playsinline></video><button class="call-video-toggle" id="callVideoToggle">▣ Camera off</button></div><div class="call-controls" id="callControls">${incoming?'<button class="call-control danger" id="declineCall">✕<small>Decline</small></button><button class="call-control accept" id="acceptCall">☎<small>Accept</small></button>':`<button class="call-control" id="muteCall">🎙<small>Mute</small></button>${mode==='video'?'<button class="call-control" id="cameraCall">▣<small>Camera</small></button>':''}<button class="call-control danger" id="endCall">☎<small>End call</small></button>`}</div><div class="call-error hidden" id="callError"></div></section>`;
  document.body.appendChild(overlay);
  $('#declineCall')?.addEventListener('click',()=>finishCall(true,'Call declined'));
@@ -430,7 +454,7 @@ async function startCall(mode){
  if(!navigator.mediaDevices?.getUserMedia||!window.RTCPeerConnection)return toast('Calling needs a recent browser with microphone/camera support.');
  if(tevloCall)return toast('Finish your current call first.');
  try{
-  const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:mode==='video'});
+  const prefs=tevloPrefs();const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:prefs.echoCancellation!==false,noiseSuppression:prefs.noiseSuppression!==false,autoGainControl:prefs.autoGainControl!==false},video:mode==='video'?{width:{ideal:prefs.callAudioQuality==='high-quality'?1280:640},height:{ideal:prefs.callAudioQuality==='high-quality'?720:480}}:false});
   tevloCall={mode,peerId:c.other_user_id,conversationId:c.id,callId:crypto.randomUUID?.()||String(Date.now())+'-'+Math.random().toString(36).slice(2),localStream:stream,remoteStream:new MediaStream(),incoming:false,muted:false,cameraOff:false};
   showCallOverlay({name:c.name,mode,status:'Calling…',video:mode==='video'});attachCallMedia();
   const pc=await createCallPeer();
@@ -460,7 +484,7 @@ async function acceptIncomingCall(){
  const p=tevloPendingCall;if(!p)return;stopIncomingCallAlert();
  if(!navigator.mediaDevices?.getUserMedia)return callError('This browser does not support microphone or camera access.');
  try{
-  const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:p.mode==='video'});
+  const prefs=tevloPrefs();const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:prefs.echoCancellation!==false,noiseSuppression:prefs.noiseSuppression!==false,autoGainControl:prefs.autoGainControl!==false},video:p.mode==='video'?{width:{ideal:prefs.callAudioQuality==='high-quality'?1280:640},height:{ideal:prefs.callAudioQuality==='high-quality'?720:480}}:false});
   tevloCall={mode:p.mode||'audio',peerId:p.from,conversationId:p.conversationId,callId:p.callId,localStream:stream,remoteStream:new MediaStream(),incoming:true,muted:false,cameraOff:false,queuedIce:p.queuedIce||[]};tevloPendingCall=null;
   showCallOverlay({name:p.name,mode:tevloCall.mode,status:'Connecting…',video:tevloCall.mode==='video'});attachCallMedia();
   const pc=await createCallPeer();await pc.setRemoteDescription(new RTCSessionDescription(p.data));
@@ -995,7 +1019,33 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     document.body.dataset.tvDensity=p.density||'normal';document.body.dataset.tvShape=p.shape||'rounded';document.body.dataset.tvMotion=p.reduceMotion||p.motionSpeed==='off'?'reduced':'normal';document.body.dataset.tvContrast=p.textContrast==='high'||p.textContrast==='High'?'high':'normal';document.body.dataset.tvWallpaper=p.wallpaper||'forest';
     document.body.classList.toggle('dark',p.theme!=='light');
     const rules=[];
+    rules.push('html,body,#root,.app{width:100%!important;max-width:none!important;min-width:0!important;min-height:100%!important;margin:0!important}');
+    rules.push('.shell{position:fixed!important;inset:0!important;width:100vw!important;max-width:none!important;height:100vh!important;height:100dvh!important;min-height:0!important;margin:0!important;border-radius:0!important;overflow:hidden!important}');
+    rules.push('.app{height:100vh!important;height:100dvh!important;overflow:hidden!important}');
     rules.push('.main,.messages{background:var(--tv-chat-bg)!important}');
+    rules.push('.app,.shell,.page-view,.empty,.empty-card,.messages-welcome,.calls-empty{background-color:var(--tv-page-bg)!important;color:var(--tv-text)!important}');
+    rules.push('.sidebar,.side-head,.sidebar-foot,.app-nav,.conversation-list{background:var(--tv-sidebar-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.main,.chat-head,.composer,.modal,.custom-settings-modal,.custom-setting-row,.settings-card,.profile-mini,.call-card{background:var(--tv-panel-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.chat-head,.chat-title,.side-title,.page-heading h1,.empty-card h2,.messages-welcome h2,.calls-empty h2,.custom-settings-modal h2{color:var(--tv-text)!important}');
+    rules.push('.chat-sub,.tagline,.meta,.stat,.conv-preview,.conv-time,.custom-setting-desc,.eyebrow{color:var(--tv-muted)!important}');
+    rules.push('.conv,.app-nav-item,.filter-tab,.icon-btn,.tool-round,.head-actions .ghost,.custom-settings-category{background:var(--tv-panel-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.conv:hover,.app-nav-item:hover,.filter-tab:hover,.icon-btn:hover,.tool-round:hover,.custom-settings-category:hover{background:var(--tv-selected-color)!important}');
+    rules.push('.conv.active,.app-nav-item.active,.filter-tab.active,.custom-settings-category.active{background:var(--tv-selected-color)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.search-wrap input,.composer textarea,.custom-settings-search,input,textarea,select{background:var(--tv-search-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.composer,.composer textarea{background:var(--tv-composer-bg)!important}');
+    rules.push('.primary,.send,.round.send,.call-page-button:not(.video){background:var(--tv-accent)!important;color:var(--tv-button-text,#fff)!important;border-color:var(--tv-accent)!important}');
+    rules.push('.secondary,.ghost,.custom-setting-control{color:var(--tv-accent)!important;border-color:var(--tv-line)!important}');
+    rules.push('.mine .bubble{background:var(--tv-outgoing)!important;color:var(--tv-button-text,#fff)!important}.theirs .bubble{background:var(--tv-incoming)!important;color:var(--tv-text)!important}');
+    rules.push('.avatar,.group-avatar{background:var(--tv-avatar-bg)!important;color:var(--tv-avatar-text)!important}');
+    rules.push('.request-banner,.calls-note,.call-contact,.messages-welcome,.calls-empty{background:var(--tv-panel-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.online-dot{background:var(--tv-online-color)!important}.unread-dot,.nav-count{background:var(--tv-unread-color)!important;color:var(--tv-text)!important}');
+    rules.push('.reaction,.upgrade-reaction,.reaction-picker button{background:var(--tv-reaction-bg)!important;color:var(--tv-reaction-text)!important}');
+    rules.push('a{color:var(--tv-link-color)!important}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid var(--tv-focus-color)!important;outline-offset:2px}');
+    rules.push('.call-overlay{background:color-mix(in srgb,var(--tv-page-bg) 88%,transparent)!important;color:var(--tv-text)!important}');
+    rules.push('.call-card{background:var(--tv-panel-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.call-status{color:var(--tv-muted)!important}.call-control{background:var(--tv-selected-color)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
+    rules.push('.call-control.accept{background:var(--tv-accent)!important;color:var(--tv-button-text,#fff)!important}.call-control.danger{background:var(--tv-danger-color,#c33)!important;color:#fff!important}');
+    rules.push('.call-overlay[data-layout="compact"] .call-card{padding:20px!important;gap:12px!important;max-width:340px!important}.call-overlay[data-layout="minimal"] .call-avatar{width:64px!important;height:64px!important}.call-overlay[data-layout="minimal"] .call-card .stat{display:none!important}');
     rules.push('body{background:var(--tv-page-bg)!important;color:var(--tv-text)!important}');
     rules.push('.sidebar{background:var(--tv-sidebar-bg)!important;color:var(--tv-text)!important}');
     rules.push('.modal,.chat-head,.composer,.chat-menu,.message-menu,.reaction-picker{background:var(--tv-panel-bg)!important;border-color:var(--tv-line)!important}');
@@ -1007,11 +1057,11 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     rules.push('body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,var(--tv-wallpaper-color-1,var(--tv-chat-bg)),var(--tv-wallpaper-color-2,var(--tv-chat-bg)),var(--tv-wallpaper-color-3,var(--tv-chat-bg)))!important}');
     rules.push('.profile-cover{background:linear-gradient(135deg,var(--tv-profile-cover-1),var(--tv-profile-cover-2))!important}');
     if(p.wallpaperCustomEnabled)rules.push('.messages{background:linear-gradient(135deg,var(--tv-wallpaper-color-1),var(--tv-wallpaper-color-2),var(--tv-wallpaper-color-3))!important}');
-    rules.push('.side-title,.chat-title,.conv-name,.modal h2{color:var(--tv-text)!important}');
+    rules.push('.side-title,.chat-title,.conv-name,.modal h2,.custom-setting-title{color:var(--tv-text)!important}');
     rules.push('.stat,.meta,.chat-sub,.conv-preview,.conv-time,.tagline{color:var(--tv-muted)!important}');
     rules.push('.primary,.send{background:var(--tv-accent)!important;color:var(--tv-button-text,#fff)!important}');
     rules.push('.mine .bubble{background:var(--tv-outgoing)!important;color:#fff!important}.theirs .bubble{background:var(--tv-incoming)!important;color:var(--tv-text)!important}');
-    rules.push('.search-wrap input{background:var(--tv-search-bg)!important}.composer,.composer textarea{background:var(--tv-composer-bg)!important}');
+    rules.push('.search-wrap input{background:var(--tv-search-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}.composer,.composer textarea{background:var(--tv-composer-bg)!important;color:var(--tv-text)!important}');
     rules.push('.icon-btn,.tool-round{color:var(--tv-nav-color,var(--tv-accent))!important}');
     rules.push('.conv.active,.filter-tab.active,.choice-row.selected{background:var(--tv-selected-color)!important}');
     rules.push('.reaction-picker,.upgrade-reaction{background:var(--tv-reaction-bg)!important;color:var(--tv-reaction-text)!important}');
