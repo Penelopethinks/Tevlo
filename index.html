@@ -413,7 +413,7 @@ async function startCall(mode){
   await new Promise(resolve=>{if(tevloCallChannel?.state==='joined')resolve();else{const until=Date.now()+5000;const check=()=>{if(!tevloCall||Date.now()>until)return resolve();if(tevloCallChannel?.state==='joined')return resolve();setTimeout(check,100)};check()}});
   const offer=await pc.createOffer();await pc.setLocalDescription(offer);
   await callSignalSend(tevloCall.peerId,{kind:'offer',callId:tevloCall.callId,conversationId:c.id,mode,data:pc.localDescription.toJSON(),name:state.profile?.name||state.profile?.real_name||'Tevlo user'});
- }catch(err){console.error(err);callError(err?.message||'Could not start the call. Check microphone and camera permissions.');callStatus('Unable to connect');if(tevloCall?.localStream){tevloCall.localStream.getTracks().forEach(t=>t.stop());}}
+ }catch(err){console.error(err);callError(err?.message||'Could not start the call. Check microphone and camera permissions.');callStatus('Unable to connect');if(tevloCall?.localStream){tevloCall.localStream.getTracks().forEach(t=>t.stop());}await finishCall(false,'Call could not start. Please try again.');}
 }
 async function handleCallSignal(p){
  if(!p||p.to!==state.user?.id||p.from===state.user?.id)return;
@@ -614,6 +614,16 @@ document.addEventListener("keydown",e=>{if(e.target?.id==="composerText"&&e.key=
     const reaction=e.target.closest('[data-reaction-msg]');if(reaction){e.preventDefault();const {error}=await sb.from('tevlo_message_reactions').upsert({message_id:reaction.dataset.reactionMsg,user_id:state.user.id,reaction:reaction.dataset.reaction},{onConflict:'message_id,user_id'});if(error)return toast('Reaction failed.');await renderMessages();return}
     const pin=e.target.closest('[data-more-msg]');if(pin){const id=pin.dataset.moreMsg;const action=prompt('Type edit, delete, pin, or cancel');if(action==='pin'){const pinned=new Set(upgradePrefs.pinnedMessages||[]);pinned.has(id)?pinned.delete(id):pinned.add(id);await saveUpgradePrefs({pinnedMessages:[...pinned]});toast(pinned.has(id)?'Message pinned on your account.':'Message unpinned.');return}}
   },true);
+  const oldHandleCallSignal=handleCallSignal;
+  handleCallSignal=async function(p){
+    if(p?.kind==='offer'){
+      if(!upgradePrefs.allowCalls){try{await callSignalSend(p.from,{kind:'decline',callId:p.callId,conversationId:p.conversationId});}catch(e){}return;}
+      if(SUPABASE_READY&&state.user?.id){
+        try{const {data:blocked}=await sb.from('tevlo_blocks').select('blocker_id').or('and(blocker_id.eq.'+state.user.id+',blocked_id.eq.'+p.from+'),and(blocker_id.eq.'+p.from+',blocked_id.eq.'+state.user.id+')').limit(1);if(blocked?.length){await callSignalSend(p.from,{kind:'decline',callId:p.callId,conversationId:p.conversationId});return;}}catch(e){console.warn('Could not verify call block status',e)}
+      }
+    }
+    return oldHandleCallSignal(p);
+  };
   const oldStartCall=startCall;
   startCall=async function(mode){
     if(!upgradePrefs.allowCalls)return toast('Calls are disabled in your privacy settings.');
