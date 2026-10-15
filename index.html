@@ -234,7 +234,8 @@ document.addEventListener("click",async e=>{const b=e.target.closest("button,[da
  if(id==="settingsBtn"){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();settingsModal();return}
  if(id==="notificationsBtn"){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();notificationsModal();return}
  if(id==="requestsBtn"){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();requestsModal();return}
- const callButton=b.closest("[data-call-mode]");if(callButton){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();startCall(callButton.dataset.callMode);return}\n const conv=b.closest("[data-conv]");if(conv){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openConversation(conv.dataset.conv);return}
+ const callButton=b.closest("[data-call-mode]");if(callButton){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();startCall(callButton.dataset.callMode);return}
+ const conv=b.closest("[data-conv]");if(conv){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();openConversation(conv.dataset.conv);return}
  const person=b.closest("[data-person]");if(person){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();startConversation(person.dataset.person);return}
  const filter=b.closest("[data-filter]");if(filter){e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();state.filter=filter.dataset.filter;document.querySelectorAll('.filter-tab').forEach(x=>x.classList.toggle('active',x===filter));renderConversationList();return}
  const call={
