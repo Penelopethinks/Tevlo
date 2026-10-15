@@ -635,8 +635,8 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
 <script id="tevlo-upgrade-patch">
 (()=>{
   const upgradeDefaults={theme:'light',wallpaper:'forest',bubble:'#159f63',accent:'#25c978',sound:'soft',lastSeen:'friends',allowCalls:true,allowMessages:'friends',quietStart:'22:00',quietEnd:'07:00',quietEnabled:false,notifications:true,readReceipts:true,statusText:'',statusVisibility:'friends',pinnedMessages:[],mutedChats:[]};
-  let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0;
-  const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages;
+  let upgradePrefs={...upgradeDefaults},callChannels=new Map(),callDurations=null,callStartedAt=0,callOfferRetryTimers=new Map(),callOrphanIce=new Map();
+  const oldAfterAuth=afterAuth,oldRenderChat=renderChat,oldSettingsModal=settingsModal,oldRenderMessages=renderMessages,oldStartCall=startCall,oldHandleCallSignal=handleCallSignal;
   async function loadUpgradePrefs(){
     upgradePrefs={...upgradeDefaults,...visualDefaults,...JSON.parse(localStorage.getItem('tevlo_preferences')||'{}')};
     if(SUPABASE_READY&&state.user?.id){
@@ -687,6 +687,35 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     const result=await ch.send({type:'broadcast',event:'signal',payload:{...payload,to,from:state.user.id}});
     if(result?.status&&result.status!=='ok')throw new Error('Call signal could not be delivered ('+result.status+').');
     return result;
+  };
+  function clearCallOfferRetry(callId){const entry=callOfferRetryTimers.get(callId);if(entry){clearInterval(entry.timer);callOfferRetryTimers.delete(callId)}}
+  handleCallSignal=async function(p){
+    if(!p)return;
+    if(p.kind==='received'){clearCallOfferRetry(p.callId);return}
+    if(p.kind==='offer'){
+      const currentId=tevloCall?.callId||tevloPendingCall?.callId;
+      if(currentId===p.callId){try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){}return}
+      const early=callOrphanIce.get(p.callId)||[];
+      if(early.length){p={...p,queuedIce:[...(p.queuedIce||[]),...early]};callOrphanIce.delete(p.callId)}
+      await oldHandleCallSignal(p);
+      if(tevloPendingCall?.callId===p.callId){try{await callSignalSend(p.from,{kind:'received',callId:p.callId,conversationId:p.conversationId})}catch(e){console.warn('Call receipt could not be sent',e)}}
+      return;
+    }
+    if(p.kind==='ice'&&!tevloCall&&tevloPendingCall?.callId!==p.callId){const list=callOrphanIce.get(p.callId)||[];if(list.length<80)list.push(p.data);callOrphanIce.set(p.callId,list);return}
+    if(['answer','hangup','decline','busy'].includes(p.kind))clearCallOfferRetry(p.callId);
+    return oldHandleCallSignal(p);
+  };
+  startCall=async function(mode){
+    await oldStartCall(mode);
+    const call=tevloCall;if(!call||call.incoming||!call.pc?.localDescription)return;
+    clearCallOfferRetry(call.callId);
+    const entry={attempts:0,timer:null};
+    entry.timer=setInterval(async()=>{
+      if(!tevloCall||tevloCall.callId!==call.callId||tevloCall.pc?.remoteDescription?.type==='answer'||entry.attempts>=7){clearCallOfferRetry(call.callId);return}
+      entry.attempts++;
+      try{await callSignalSend(call.peerId,{kind:'offer',callId:call.callId,conversationId:call.conversationId,mode:call.mode,data:call.pc.localDescription.toJSON(),name:state.profile?.name||state.profile?.real_name||'Tevlo user'})}catch(err){console.warn('Call offer retry failed',err)}
+    },1400);
+    callOfferRetryTimers.set(call.callId,entry);
   };
   renderChat=async function(c){
     await oldRenderChat(c);
@@ -1044,9 +1073,9 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     document.body.dataset.tvDensity=p.density||'normal';document.body.dataset.tvShape=p.shape||'rounded';document.body.dataset.tvMotion=p.reduceMotion||p.motionSpeed==='off'?'reduced':'normal';document.body.dataset.tvContrast=p.textContrast==='high'||p.textContrast==='High'?'high':'normal';document.body.dataset.tvWallpaper=p.wallpaper||'forest';
     document.body.classList.toggle('dark',p.theme!=='light');
     const rules=[];
-    rules.push('html,body,#root,.app{width:100%!important;max-width:none!important;min-width:0!important;min-height:100%!important;margin:0!important}');
-    rules.push('.shell{position:fixed!important;inset:0!important;width:100vw!important;max-width:none!important;height:100vh!important;height:100dvh!important;min-height:0!important;margin:0!important;border-radius:0!important;overflow:hidden!important}');
-    rules.push('.app{height:100vh!important;height:100dvh!important;overflow:hidden!important}');
+    rules.push('html,body,#root{display:block!important;position:relative!important;width:100%!important;height:100%!important;min-width:0!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}');
+    rules.push('#root>.app,.app{display:block!important;position:fixed!important;inset:0!important;width:100vw!important;max-width:none!important;height:100vh!important;height:100dvh!important;min-height:0!important;margin:0!important;padding:0!important;overflow:hidden!important}');
+    rules.push('.shell{position:absolute!important;inset:0!important;display:flex!important;flex-direction:row!important;width:100%!important;max-width:none!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;border-radius:0!important;overflow:hidden!important;box-sizing:border-box!important}');
     rules.push('.main,.messages{background:var(--tv-chat-bg)!important}');
     rules.push('.app,.shell,.page-view,.empty,.empty-card,.messages-welcome,.calls-empty{background-color:var(--tv-page-bg)!important;color:var(--tv-text)!important}');
     rules.push('.sidebar,.side-head,.sidebar-foot,.app-nav,.conversation-list{background:var(--tv-sidebar-bg)!important;color:var(--tv-text)!important;border-color:var(--tv-line)!important}');
@@ -1153,6 +1182,7 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     rules.push('body[data-tv-theme="light"]{color:var(--tv-text)!important}');
     rules.push('body[data-tv-contrast="high"] .stat,body[data-tv-contrast="high"] .meta,body[data-tv-contrast="high"] .chat-sub{color:var(--tv-text)!important}');
     rules.push('@media(max-width:900px){.sidebar{flex-basis:320px!important;width:320px!important;min-width:280px!important}.custom-settings-layout{grid-template-columns:150px minmax(0,1fr)!important}.custom-setting-row{grid-template-columns:minmax(0,1fr) minmax(130px,180px)!important}}');
+    rules.push('.mobile-only{display:none!important}');
     rules.push('@media(max-width:700px){.shell{display:flex!important}.sidebar{flex:1 1 100%!important;width:100%!important;min-width:0!important;max-width:none!important}.main{display:none!important;width:100%!important;flex:1 1 100%!important}.shell.chat-open .sidebar{display:none!important}.shell.chat-open .main{display:flex!important}.mobile-only{display:grid!important}.chat-head{padding:12px!important;min-height:64px!important}.messages{padding:14px!important}.bubble{max-width:88vw!important}.custom-settings-modal{width:calc(100vw - 12px)!important;height:94dvh!important;padding:12px!important}.custom-settings-layout{grid-template-columns:112px minmax(0,1fr)!important;gap:8px!important}.custom-settings-categories{padding-right:4px!important}.custom-settings-category{font-size:12px!important;padding:9px 6px!important}.custom-setting-row{grid-template-columns:minmax(0,1fr)!important;gap:8px!important;padding:13px 2px!important}.custom-setting-control{width:100%!important}.custom-settings-modal h2{font-size:22px!important}.custom-settings-footer{flex-wrap:wrap!important}}');
     let style=document.getElementById('tevlo-dynamic-custom-style');if(!style){style=document.createElement('style');style.id='tevlo-dynamic-custom-style';document.head.appendChild(style)}style.textContent=rules.join('\n');
     document.querySelectorAll('#newChat').forEach(el=>el.remove());
@@ -1207,7 +1237,7 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
     });
   }
   settingsModal=function(){
-    customActiveCategory=upgradePrefs.settingsCategoryRemember?(upgradePrefs.lastSettingsCategory||'Appearance'):'Appearance';
+    customActiveCategory='Appearance';
     showModal('<div class="custom-settings-modal"><div class="modal-head"><div><h2>Customize Tevlo</h2><div class="stat">Personalize colors, chats, layout, privacy preferences, and more.</div></div><button class="ghost" data-close aria-label="Close settings">✕</button></div><div class="custom-settings-toolbar"><input id="customSettingsSearch" class="custom-settings-search" type="search" placeholder="Search hundreds of settings…"><button class="secondary" id="customResetView">Reset view</button></div><div class="custom-settings-layout" id="customSettingsLayout"><nav class="custom-settings-categories" id="customSettingsCategories" aria-label="Settings categories"></nav><section class="custom-settings-list" id="customSettingsList" aria-live="polite"></section></div><div class="custom-settings-footer"><span id="customSettingsCount" class="custom-settings-count"></span><div style="display:flex;gap:8px"><button class="secondary" id="customExportSettings">Export</button><button class="primary" id="customSaveClose">Done</button></div></div></div>');
     $('#modal .modal')?.classList.add('custom-settings-shell');
     const search=$('#customSettingsSearch');search.oninput=()=>{if(search.value.trim())customActiveCategory='All';customRenderSettings(search.value)};
