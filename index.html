@@ -1380,7 +1380,58 @@ body[data-tv-wallpaper="forest"] .messages{background:linear-gradient(145deg,#07
   };
     renderMessages=async function(){
     await oldRenderMessages();
-    const wrap=$('#messages');if(!wrap||!SUPABASE_READY||!state.messages?.length)return;
+    // Reapply the vertical layout to every rendered message, including messages sent before this fix.
+    const wrap=$('#messages');
+    if(wrap){
+      const important=(el,prop,value)=>el.style.setProperty(prop,value,'important');
+      important(wrap,'display','grid');
+      important(wrap,'grid-template-columns','minmax(0,1fr)');
+      important(wrap,'grid-auto-flow','row');
+      important(wrap,'grid-auto-rows','max-content');
+      important(wrap,'align-content','start');
+      important(wrap,'justify-content','stretch');
+      important(wrap,'width','100%');
+      important(wrap,'min-width','0');
+      important(wrap,'overflow-x','hidden');
+      important(wrap,'overflow-y','auto');
+      wrap.querySelectorAll(':scope > .row').forEach(row=>{
+        important(row,'display','grid');
+        important(row,'grid-column','1 / -1');
+        important(row,'grid-template-columns','minmax(0,1fr)');
+        important(row,'grid-auto-flow','row');
+        important(row,'float','none');
+        important(row,'position','static');
+        important(row,'width','100%');
+        important(row,'max-width','100%');
+        important(row,'min-width','0');
+        important(row,'margin','0');
+        const stack=row.querySelector(':scope > .message-stack');
+        if(stack){
+          important(stack,'display','flex');
+          important(stack,'flex-direction','column');
+          important(stack,'grid-column','1');
+          important(stack,'justify-self','start');
+          important(stack,'float','none');
+          important(stack,'position','static');
+          important(stack,'width','fit-content');
+          important(stack,'max-width','min(82%, 620px)');
+          important(stack,'min-width','0');
+          important(stack,'margin','0');
+          const bubble=stack.querySelector('.bubble');
+          if(bubble){
+            important(bubble,'display','block');
+            important(bubble,'float','none');
+            important(bubble,'width','fit-content');
+            important(bubble,'max-width','100%');
+            important(bubble,'min-width','0');
+            important(bubble,'white-space','pre-wrap');
+            important(bubble,'overflow-wrap','anywhere');
+            important(bubble,'word-break','normal');
+          }
+        }
+      });
+    }
+    if(!wrap||!SUPABASE_READY||!state.messages?.length)return;
     const ids=state.messages.map(m=>m.id).filter(id=>/^[0-9a-f-]{36}$/i.test(id));if(!ids.length)return;
     try{const {data,error}=await sb.from('tevlo_message_reactions').select('message_id,user_id,reaction').in('message_id',ids);if(error||!data?.length)return;
       const by={};for(const r of data)(by[r.message_id]||=[]).push(r);
